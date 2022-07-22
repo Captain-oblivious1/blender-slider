@@ -6,9 +6,9 @@ function App() {
 	return (
 		<div className="App">
 			<header className="App-header">
-				<BlenderSplitter>
-					<button>Click me again!</button>
-					<button>Click me yet again!</button>
+				<BlenderSplitter orientation="column">
+					<div percent="40"><p>Click me!</p></div>
+					<div percent="60"><p>Click me again!</p></div>
 				</BlenderSplitter>
 			</header>
 		</div>

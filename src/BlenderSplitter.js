@@ -1,21 +1,14 @@
 import { useState } from "react";
 
-const BlenderSplitter = ( {children} ) => {
-
-	//console.log("number of children=" + children.length)
-	
+const BlenderSplitter = ( {children, orientation} ) => {
 
 	return (
-
-		<div style={{display:"flex", flexDirection: "column", width: "400", height: "200px", border: "1px solid black"}}>
-			<div style={{background: "aqua", height: "60%", width: "100%"}}>
-				<p>DIV #1</p>
+		<div style={{display:"flex", flexDirection: "column", width: "400px", height: "200px", border: "1px solid black"}}>
+			{children.map( (child,index) => (
+			<div key={index} style={{ height: child.props.percent+"%", width: "100%", border: "1px solid black", overflow: "auto" }}>
+				{child}
 			</div>
-			<div style={{height: "5px"}}>
-			</div>
-			<div style={{background: "red", height: "40%", width: "100%"}}>
-				<p>DIV #2</p>
-			</div>
+			))}
 		</div>
 	);
 }
