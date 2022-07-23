@@ -7,8 +7,8 @@ function App() {
 		<div className="App">
 			<header className="App-header">
 				<BlenderSplitter orientation="column">
-					<div percent="40"><p>Click me!</p></div>
-					<div percent="60"><p>Click me again!</p></div>
+					<div className="blah" percent="40"><p>Click me!</p></div>
+					<div className="blah" percent="60"><p>Click me again!</p></div>
 				</BlenderSplitter>
 			</header>
 		</div>

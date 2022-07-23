@@ -3,9 +3,9 @@ import { useState } from "react";
 const BlenderSplitter = ( {children, orientation} ) => {
 
 	return (
-		<div style={{display:"flex", flexDirection: "column", width: "400px", height: "200px", border: "1px solid black"}}>
+		<div style={{display:"flex", flexDirection: "column", width: "100%", height: "100%"}}>
 			{children.map( (child,index) => (
-			<div key={index} style={{ height: child.props.percent+"%", width: "100%", border: "1px solid black", overflow: "auto" }}>
+			<div key={index} style={{ height: child.props.percent+"%", width: "100%", overflow: "auto" }}>
 				{child}
 			</div>
 			))}
