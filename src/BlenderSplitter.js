@@ -104,7 +104,6 @@ const BlenderSplitter = ( {children, orientation} ) => {
 				mouseLocation : new Vector( e.clientX, e.clientY ),
 				splitPercentages : children.map( child => child.percent )
 			};
-			//console.log(`mouse down location=(${e.clientX},${e.clientY})`);
 		}
 	}
 
