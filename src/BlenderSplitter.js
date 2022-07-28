@@ -66,7 +66,7 @@ const BlenderSplitter = ( {children, orientation} ) => {
 				pressedMouseLocation : pressSnapshot ? {
 					split: pressSnapshot.mouseLocation.y,
 					edge: pressSnapshot.mouseLocation.x } : null,
-				currentMouseLocation : {  
+				currentMouseLocation : {
 					split: e.clientY,
 					edge: e.clientX }
 			}
@@ -115,9 +115,12 @@ const BlenderSplitter = ( {children, orientation} ) => {
 	const nChildren = children.length;
 
 	const State = {
-		CopyEdge: 1,
-		CopySplit: 2,
-		ResizeSplit: 3,
+		ToCopyEdge: 1,
+		ToCopySplit: 2,
+		ToResizeSplit: 3,
+		CopyingEdge: 4,
+		CopyingSplit: 5,
+		ResizingSplit: 6,
 		None: 4
 	}
 
@@ -136,28 +139,36 @@ const BlenderSplitter = ( {children, orientation} ) => {
 			if(
 					testWithinMargin( mouseInfo.minEdge, currentMouseLocationInEdge ) ||
 					testWithinMargin( mouseInfo.maxEdge, currentMouseLocationInEdge ) ) {
-				state = State.CopyEdge;
+				cursorToUse = "copy";
+				state = pressSnapshot===null ? State.ToCopyEdge : State.CopyingEdge;
 			} else if( nearSplit != null ){
-				state = State.CopySplit;
+				cursorToUse = "copy";
+				state = pressSnapshot===null ? State.ToCopySplit : State.CopyingSplit;
 			} else {
 				state = State.None;
 			}
 		} else if( nearSplit!=null && nearSplit!=0 && nearSplit!=nChildren ) {
-			state = State.ResizeSplit;
+			cursorToUse = resizeCursor;
+			state = pressSnapshot===null ? State.ToResizeSplit : State.ResizeSplit;
 		} else {
 			state = State.None;
 		}
-
-		// Set cursor based on state
-		var cursorToUse;
-		switch(state) {
-			case State.CopyEdge:
-			case State.CopySplit:   cursorToUse = "copy";       break;
-			case State.ResizeSplit: cursorToUse = resizeCursor; break;
-			default:                cursorToUse = "default";    break;
-		}
 		e.currentTarget.style.cursor = cursorToUse;
 
+		switch(state) {
+			case State.CopyEdge:
+			case State.CopySplit:
+				break;
+			case State.ResizeSplit:
+				resizeSplit();
+				break;
+			default:
+				break;
+		}
+	}
+
+	const resizeSplit = mouseInfo => {
+		
 
 	}
 
