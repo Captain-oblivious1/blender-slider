@@ -1,5 +1,5 @@
-import { useState } from "react";
-import Vector from "./Vector"
+//import { useState } from "react";
+//import Vector from "./Vector"
 
 const BlenderSplitter = ( {children, orientation} ) => {
 
@@ -14,10 +14,30 @@ const BlenderSplitter = ( {children, orientation} ) => {
 		throw "Expect orientation to be either 'row' or 'column'";
 	}
 
-	var resizeCursor;
-	var calculateMouseInfo;
+	class StateInfo {
+		constructor(
+				currentMouseInfo,
+				pressedMouseInfo,
+				nearEdge,
+				nearSplit,
+				isCopying,
+				) {
+			this.currentMouseInfo = currentMouseInfo;
+			this.pressedMouseInfo = pressedMouseInfo;
+			this.nearEdge = nearEdge;
+			this.nearSplit = nearSplit;
+			this.isCopying = isCopying;
+		}
+	}
 
-	var pressSnapshot = null;
+	const nChildren = children.length;
+
+	var currentState = new StateInfo(
+				null,
+				null,
+				null,
+				null,
+				false);
 
 	// I don't want 2 copies of the code for horizontal and vertical implementations.
 	// They would be the same except left=top, right=bottom, x=y, etc.  So using terms
@@ -33,6 +53,8 @@ const BlenderSplitter = ( {children, orientation} ) => {
 	//            V  └──────┘          V  └─┴─┴─┴─┘
 	//                       max                   max
 
+	var resizeCursor;
+	var calculateMouseInfo;
 	if( isOrientationRow ) {
 		resizeCursor = "col-resize";
 
@@ -44,12 +66,9 @@ const BlenderSplitter = ( {children, orientation} ) => {
 				maxSplit : rect.right,
 				minEdge : rect.top,
 				maxEdge : rect.bottom,
-				//pressedMouseLocation : pressSnapshot ? {
-				//	split: pressSnapshot.mouseLocation.x,
-				//	edge: pressSnapshot.mouseLocation.y } : null,
-				//currentMouseLocation : {  
-				//	split: e.clientX,
-				//	edge: e.clientY }
+				currentMouseLocation : {
+					split: e.clientX,
+					edge: e.clientY }
 			}
 		}
 	} else {
@@ -63,12 +82,9 @@ const BlenderSplitter = ( {children, orientation} ) => {
 				maxSplit : rect.bottom,
 				minEdge : rect.left,
 				maxEdge : rect.right,
-				//pressedMouseLocation : pressSnapshot ? {
-				//	split: pressSnapshot.mouseLocation.y,
-				//	edge: pressSnapshot.mouseLocation.x } : null,
-				//currentMouseLocation : {
-				//	split: e.clientY,
-				//	edge: e.clientX }
+				currentMouseLocation : {
+					split: e.clientY,
+					edge: e.clientX }
 			}
 		}
 	}
@@ -77,7 +93,7 @@ const BlenderSplitter = ( {children, orientation} ) => {
 
 	const testWithinMargin = (one, two) => Math.abs(one - two) <= reshapeMargin;
 
-	const testNearAnySplit = mouseInfo => {
+	const testNearSplit = mouseInfo => {
 		var locationOfSplitUnderConsideration = mouseInfo.minSplit;
 		var locationOfCurrentMouse = mouseInfo.currentMouseLocation.split;
 		var which = null;
@@ -97,118 +113,74 @@ const BlenderSplitter = ( {children, orientation} ) => {
 		return which;
 	}
 
+	const testNearEdge = mouseInfo => {
+		const currentMouseLocationInEdgeCoordinates = mouseInfo.currentMouseLocation.edge;
+		if( testWithinMargin( mouseInfo.minEdge, currentMouseLocationInEdgeCoordinates ) )
+			return 0;
+		else if( testWithinMargin( mouseInfo.maxEdge, currentMouseLocationInEdgeCoordinates ) )
+			return 1;
+		else
+			return null;
+	}
+
 	const mouseDown = (e) => {
-		if( pressSnapshot === null ) {
-			pressSnapshot = {
-				ctrlDown : e.ctrlKey,
-				mouseLocation : new Vector( e.clientX, e.clientY ),
-				splitPercentages : children.map( child => child.percent )
-			};
-		}
+		determineState(e);
 	}
 
 	const mouseUp = (e) => {
-		pressSnapshot = null;
-	}
-
-	const nChildren = children.length;
-
-	//const MouseProximityEnum = {
-	//	NearEdge: 1,
-	//	NearSplit: 2,
-	//	None: 3
-	//}
-
-	class StateInfo {
-		constructor(
-				//mouseProximity,
-				nearEdge,
-				nearSplit,
-				pressedMouseInfo,
-				currentMouseInfo,
-				isCopying,
-				) {
-			//this.mouseState = mouseState;
-			this.nearEdge = nearEdge;
-			this.nearSplit = nearSplit;
-			this.pressedMouseInfo = pressedMouseInfo;
-			this.currentMouseInfo = currentMouseInfo;
-			this.isCopying = isCopying;
-		}
+		determineState(e);
 	}
 
 	const mouseMoved = (e) => {
-		// Convert mouse info to split/edge coordinate system
-		const mouseInfo = calculateMouseInfo(e);
-
-		var state = calculateState(e,mouseInfo);
-
-		drawCursor(state,e.currentTarget);
-
-		//switch(state) {
-		//	case State.CopyEdge:
-		//	case State.CopySplit:
-		//		break;
-		//	case State.ResizeSplit:
-		//		resizeSplit();
-		//		break;
-		//	default:
-		//		break;
-		//}
+		determineState(e);
 	}
 
+	const determineState = (e) => {
+		const currentMouseInfo = calculateMouseInfo(e);
+		
+		var pressedMouseInfo;
+		const wasPressedBefore = currentState.pressedMouseInfo!=null;
+		const isPressedNow = e.button == 0;
+		if( isPressedNow ) {
+			if( wasPressedBefore ) {
+				pressedMouseInfo = currentState.pressedMouseInfo; // Keep original info
+			} else {
+				pressedMouseInfo = currentMouseInfo;
+			}
+		} else {
+			pressedMouseInfo = null; // clear out
+		}
+
+		const nearEdge = testNearEdge( currentMouseInfo );
+		const nearSplit = testNearSplit( currentMouseInfo );
+		const isCopying = e.ctrlKey;
+
+		currentState = new StateInfo(
+				currentMouseInfo,
+				pressedMouseInfo,
+				nearEdge,
+				nearSplit,
+				isCopying);
+		
+		drawCursor(currentState,e.currentTarget);
+
+		return currentState;
+	}
 
 	const drawCursor = (state,target) => {
-
 		var cursorToUse;
-		if( state.isCopying ) {
+		if( state.nearSplit!=null && state.nearSplit!=0 && state.nearSplit!=nChildren ) {
+			cursorToUse = resizeCursor;
+		} else if( state.isCopying ) {
 			if( state.nearEdge!=null ||  state.nearSplit != null ) {
 				cursorToUse = "copy";
 			} else {
 				cursorToUse = "default";
 			}
-		} else if( state.nearSplit!=null && state.nearSplit!=0 && state.nearSplit!=nChildren ) {
-			cursorToUse = resizeCursor;
 		} else {
 			cursorToUse = "default";
 		}
 		target.style.cursor = cursorToUse;
-	}
-
-	const calculateState = (e,mouseInfo) => {
-		const currentMouseLocationInEdge = mouseInfo.currentMouseLocation.edge;
-		// Set state based on location and ctrl key
-
-		// Test to see if cursor is near any splits (used all over the place below)
-		const nearSplit = testNearAnySplit( mouseInfo );
-	
-		var cursorToUse;
-		if( e.ctrlKey ) {
-			if(
-					testWithinMargin( mouseInfo.minEdge, currentMouseLocationInEdge ) ||
-					testWithinMargin( mouseInfo.maxEdge, currentMouseLocationInEdge ) ) {
-				cursorToUse = "copy";
-				//state = pressSnapshot===null ? State.ToCopyEdge : State.CopyingEdge;
-			} else if( nearSplit != null ){
-				cursorToUse = "copy";
-				//state = pressSnapshot===null ? State.ToCopySplit : State.CopyingSplit;
-			} else {
-				//state = State.None;
-				cursorToUse = "default";
-			}
-		} else if( nearSplit!=null && nearSplit!=0 && nearSplit!=nChildren ) {
-			cursorToUse = resizeCursor;
-			//state = pressSnapshot===null ? State.ToResizeSplit : State.ResizeSplit;
-		} else {
-			//state = State.None;
-			cursorToUse = "default";
-		}
-		e.currentTarget.style.cursor = cursorToUse;
-	}
-
-	const resizeSplit = mouseInfo => {
-		
-
 	}
 
 	return (
