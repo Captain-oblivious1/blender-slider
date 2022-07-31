@@ -1,5 +1,4 @@
-//import { useState } from "react";
-//import Vector from "./Vector"
+import { useState } from "react";
 
 const BlenderSplitter = ( {children, orientation} ) => {
 
@@ -14,30 +13,18 @@ const BlenderSplitter = ( {children, orientation} ) => {
 		throw "Expect orientation to be either 'row' or 'column'";
 	}
 
-	class StateInfo {
-		constructor(
-				currentMouseInfo,
-				pressedMouseInfo,
-				nearEdge,
-				nearSplit,
-				isCopying,
-				) {
-			this.currentMouseInfo = currentMouseInfo;
-			this.pressedMouseInfo = pressedMouseInfo;
-			this.nearEdge = nearEdge;
-			this.nearSplit = nearSplit;
-			this.isCopying = isCopying;
-		}
-	}
-
 	const nChildren = children.length;
 
-	var currentState = new StateInfo(
-				null,
-				null,
-				null,
-				null,
-				false);
+	const [percentages, setPercentages] = useState( children.map( child => parseFloat(child.props.percent) ) );
+
+	const [currentState, setCurrentState] = useState( {
+		currentMouseInfo: null,
+		pressedMouseInfo: null,
+		splitPercentagesOnPress: null,
+		nearEdge: null,
+		nearSplit: null,
+		isCopying : false
+	} );
 
 	// I don't want 2 copies of the code for horizontal and vertical implementations.
 	// They would be the same except left=top, right=bottom, x=y, etc.  So using terms
@@ -66,7 +53,7 @@ const BlenderSplitter = ( {children, orientation} ) => {
 				maxSplit : rect.right,
 				minEdge : rect.top,
 				maxEdge : rect.bottom,
-				currentMouseLocation : {
+				mouseLocation : {
 					split: e.clientX,
 					edge: e.clientY }
 			}
@@ -82,42 +69,40 @@ const BlenderSplitter = ( {children, orientation} ) => {
 				maxSplit : rect.bottom,
 				minEdge : rect.left,
 				maxEdge : rect.right,
-				currentMouseLocation : {
+				mouseLocation : {
 					split: e.clientY,
 					edge: e.clientX }
 			}
 		}
 	}
 
-	const reshapeMargin = 2;
+	const reshapeMargin = 10;
 
 	const testWithinMargin = (one, two) => Math.abs(one - two) <= reshapeMargin;
 
 	const testNearSplit = mouseInfo => {
 		var locationOfSplitUnderConsideration = mouseInfo.minSplit;
-		var locationOfCurrentMouse = mouseInfo.currentMouseLocation.split;
-		var which = null;
+		var locationOfCurrentMouse = mouseInfo.mouseLocation.split;
 		if( testWithinMargin(locationOfCurrentMouse,locationOfSplitUnderConsideration) ) {
-			which = 0;
+			return 0;
 		} else {
-			children.every( (child,index) => {
-				locationOfSplitUnderConsideration += (mouseInfo.maxSplit-mouseInfo.minSplit) * child.props.percent*.01;
+			const splitLength = mouseInfo.maxSplit-mouseInfo.minSplit;
+			for(var i=0;i<percentages.length;i++) {
+				locationOfSplitUnderConsideration +=  splitLength * percentages[i]*.01;
 				if( testWithinMargin(locationOfCurrentMouse,locationOfSplitUnderConsideration) ) {
-					which = index + 1;
-					return false;
+					return i+1;
 				}
-				return true;
-			} );
+			};
 		}
 
-		return which;
+		return null;
 	}
 
 	const testNearEdge = mouseInfo => {
-		const currentMouseLocationInEdgeCoordinates = mouseInfo.currentMouseLocation.edge;
-		if( testWithinMargin( mouseInfo.minEdge, currentMouseLocationInEdgeCoordinates ) )
+		const mouseLocationInEdgeCoordinates = mouseInfo.mouseLocation.edge;
+		if( testWithinMargin( mouseInfo.minEdge, mouseLocationInEdgeCoordinates ) )
 			return 0;
-		else if( testWithinMargin( mouseInfo.maxEdge, currentMouseLocationInEdgeCoordinates ) )
+		else if( testWithinMargin( mouseInfo.maxEdge, mouseLocationInEdgeCoordinates ) )
 			return 1;
 		else
 			return null;
@@ -133,34 +118,64 @@ const BlenderSplitter = ( {children, orientation} ) => {
 
 	const mouseMoved = (e) => {
 		determineState(e);
+
+		if( currentState.isCopying ) {
+		} else {
+			if( currentState.pressedMouseInfo!==null ) {
+				if( currentState.nearEdge!==null ) {
+				} else if( currentState.nearSplit!==null &&
+						currentState.nearSplit!==0 &&
+						currentState.nearSplit!==nChildren ) {
+					var pixelOffset = currentState.currentMouseInfo.mouseLocation.split - currentState.pressedMouseInfo.mouseLocation.split;
+					var splitLength = currentState.currentMouseInfo.maxSplit - currentState.currentMouseInfo.minSplit;
+					var percentOffset = pixelOffset*100/splitLength;
+					var newPercentages = [...currentState.splitPercentagesOnPress]
+					newPercentages[currentState.nearSplit-1] += parseFloat(percentOffset);
+					newPercentages[currentState.nearSplit] -= parseFloat(percentOffset);
+					setPercentages(newPercentages);
+				}
+			}
+		}
 	}
 
 	const determineState = (e) => {
 		const currentMouseInfo = calculateMouseInfo(e);
+		const nearEdge = testNearEdge( currentMouseInfo );
+		const nearSplit = testNearSplit( currentMouseInfo );
 		
 		var pressedMouseInfo;
+		var splitPercentagesOnPress;
+
 		const wasPressedBefore = currentState.pressedMouseInfo!=null;
-		const isPressedNow = e.button == 0;
+		const isPressedNow = e.buttons &= 1;
 		if( isPressedNow ) {
 			if( wasPressedBefore ) {
 				pressedMouseInfo = currentState.pressedMouseInfo; // Keep original info
+				splitPercentagesOnPress = currentState.splitPercentagesOnPress;
 			} else {
-				pressedMouseInfo = currentMouseInfo;
+				if( nearSplit!=null ) {
+					pressedMouseInfo = currentMouseInfo; // Copy current mode info to pressed
+					splitPercentagesOnPress = [...percentages];
+				} else {
+					pressedMouseInfo = null;
+					splitPercentagesOnPress = null;
+				}
 			}
 		} else {
 			pressedMouseInfo = null; // clear out
+			splitPercentagesOnPress = null;
 		}
 
-		const nearEdge = testNearEdge( currentMouseInfo );
-		const nearSplit = testNearSplit( currentMouseInfo );
 		const isCopying = e.ctrlKey;
 
-		currentState = new StateInfo(
-				currentMouseInfo,
-				pressedMouseInfo,
-				nearEdge,
-				nearSplit,
-				isCopying);
+		setCurrentState( {
+			currentMouseInfo: currentMouseInfo,
+			pressedMouseInfo: pressedMouseInfo,
+			splitPercentagesOnPress: splitPercentagesOnPress,
+			nearEdge: nearEdge,
+			nearSplit: nearSplit,
+			isCopying: isCopying
+		} );
 		
 		drawCursor(currentState,e.currentTarget);
 
@@ -193,7 +208,7 @@ const BlenderSplitter = ( {children, orientation} ) => {
 						width: "100%",
 						height: "100%"}}>
 			{children.map( (child,index) => (
-			<div key={index} style={{ height: child.props.percent+"%", width: "100%", overflow: "auto" }}>
+			<div key={index} style={{ height: percentages[index]+"%", width: "100%", overflow: "auto" }}>
 				{child}
 			</div>
 			))}
