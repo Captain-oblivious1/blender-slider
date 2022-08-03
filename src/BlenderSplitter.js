@@ -208,7 +208,7 @@ const BlenderSplitter = ( {children, orientation} ) => {
 						width: "100%",
 						height: "100%"}}>
 			{children.map( (child,index) => (
-			<div key={index} style={{ height: percentages[index]+"%", width: "100%", overflow: "auto" }}>
+			<div key={index} style={{ height: percentages[index]+"%", width: "100%", overflow: "auto", pointerEvents: "none" }}>
 				{child}
 			</div>
 			))}

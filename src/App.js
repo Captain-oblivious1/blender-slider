@@ -29,6 +29,25 @@ function App() {
 					</div>
 				</BlenderSplitter>
 			</header>
+		
+				<p>blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah</p>
+			<header className="App-header">
+				<BlenderSplitter orientation="column">
+					<div id="top" className="blah" percent="40" onClick={clickMe}>
+						<p>Click me1!</p>
+						<p>This is some text</p>
+						<p>to make area larger</p>
+					</div>
+					<div id="middle" className="blah" percent="25" onClick={clickMe}>
+						<p>Click me again!</p>
+						<p>This is some text</p>
+						<p>to make area larger</p>
+					</div>
+					<div id="bottom" className="blah" percent="35" onClick={clickMe}>
+						<p>Short text!</p>
+					</div>
+				</BlenderSplitter>
+			</header>
 		</div>
 	);
 
