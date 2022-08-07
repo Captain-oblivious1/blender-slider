@@ -52,14 +52,18 @@
 	right: 20px;
 }
 
-#top {
+#one {
 	background-color: red;
 }
 
-#middle {
+#two {
 	background-color: white;
 }
 
-#bottom {
+#three {
 	background-color: blue;
+}
+
+#four {
+	background-color: yellow;
 }

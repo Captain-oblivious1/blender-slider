@@ -9,42 +9,80 @@ function App() {
 		console.log("Clicked Me! id="+e.currentTarget.id);
 	}
 
+	//        40
+	//     ┌─────────┐
+	//     │   one   │
+	//     │         │
+	//   30├───┬─────┤
+	//     │   │     │
+	//     │two│three│
+	//     │   │     │
+	//   70├───┴─────┤
+	//     │  four   │
+	//     │         │
+	//     └─────────┘
+
+
+	const layout2 = {
+		areTopLevelSplittersVertical: false,
+
+		content: "one"
+	};
+
+	const layout1 = {
+		areTopLevelSplittersVertical: false,
+
+		content: [
+			"one",
+			20,
+			"two",
+			70,
+			"three"
+		]
+	};
+
+	const layout = {
+		areTopLevelSplittersVertical: false,
+
+		content: [
+			"one",
+			20,
+			[
+				"two",
+				40,
+				[
+					"three",
+					50,
+					"one"
+				]
+			],
+			80,
+			"four"
+		]
+	};
+
 	return (
 		<div className="App">
 				<p>blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah</p>
 			<header className="App-header">
-				<BlenderSplitter orientation="column">
-					<div id="top" className="blah" percent="40" onClick={clickMe}>
+				<BlenderSplitter layout={layout}>
+					<div id="one" className="blah" onClick={clickMe}>
 						<p>Click me1!</p>
-						<p>This is some text</p>
+						<p>One</p>
 						<p>to make area larger</p>
 					</div>
-					<div id="middle" className="blah" percent="25" onClick={clickMe}>
+					<div id="two" className="blah" onClick={clickMe}>
 						<p>Click me again!</p>
-						<p>This is some text</p>
+						<p>Two</p>
 						<p>to make area larger</p>
 					</div>
-					<div id="bottom" className="blah" percent="35" onClick={clickMe}>
-						<p>Short text!</p>
-					</div>
-				</BlenderSplitter>
-			</header>
-		
-				<p>blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah</p>
-			<header className="App-header">
-				<BlenderSplitter orientation="column">
-					<div id="top" className="blah" percent="40" onClick={clickMe}>
-						<p>Click me1!</p>
-						<p>This is some text</p>
-						<p>to make area larger</p>
-					</div>
-					<div id="middle" className="blah" percent="25" onClick={clickMe}>
+					<div id="three" className="blah" onClick={clickMe}>
 						<p>Click me again!</p>
-						<p>This is some text</p>
+						<p>Three</p>
 						<p>to make area larger</p>
 					</div>
-					<div id="bottom" className="blah" percent="35" onClick={clickMe}>
-						<p>Short text!</p>
+					<div id="four" className="blah" onClick={clickMe}>
+						<p>Four</p>
 					</div>
 				</BlenderSplitter>
 			</header>
