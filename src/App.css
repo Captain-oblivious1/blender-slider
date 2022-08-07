@@ -54,6 +54,7 @@
 
 #one {
 	background-color: red;
+	white-space: nowrap;
 }
 
 #two {

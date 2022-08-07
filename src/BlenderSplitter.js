@@ -5,12 +5,112 @@ const BlenderSplitter = ( {children, layout} ) => {
 	const childMap = {};
 	children.forEach( e => childMap[ e.props.id ] = e );
 
-	const generateDOM = layout => generateContent(layout.content,layout.areTopLevelSplittersVertical);
+	const eventToPercentVector = e => {
+		const rect = e.currentTarget.getBoundingClientRect();
+		return {
+			x: (e.clientX-rect.left)/(rect.right-rect.left) * 100,
+			y: (e.clientY-rect.top)/(rect.bottom-rect.top) * 100 };
+	}
 
-	const generateContent = (layout,isDirectionHorizontal) => {
+	const testNearSplit = percentVector => {
+		return testNearSplitRecursive(percentVector,layout.content,layout.areTopLevelSplittersVertical);
+	}
+
+	const contentArrayToSplitArray = content => {
+		var percentArray=[0];
+		for(var i=1;i<content.length;i+=2) {
+			percentArray.push(content[i]);
+		}
+		percentArray.push(100);
+		return percentArray;
+	}
+
+	const splitArrayIndexToContentIndex = index => index*2-1;
+
+	const reshapeMargin = 1;
+
+	const testWithinMargin = (one, two) => Math.abs(one - two) <= reshapeMargin;
+
+	const testNearSplitRecursive = (percentVector,content,isCurrentSplitterVertical) => {
+		const valToTest = isCurrentSplitterVertical ? percentVector.x : percentVector.y;
+
+		if( Array.isArray(content) ) {
+			const splitArray = contentArrayToSplitArray(content);
+			//console.log("splitArray="+splitArray);
+			var minIndex = 0;
+			var maxIndex = splitArray.length-1;
+			while(minIndex+1<maxIndex) {
+				const currentIndex = Math.floor(minIndex+maxIndex/2);
+				const currentValue = splitArray[currentIndex];
+				//console.log(`minIndex=${minIndex} maxIndex=${maxIndex} currentIndex=${currentIndex} currentValue=${currentValue}`);
+				if( testWithinMargin( currentValue, valToTest ) ) {
+					return [splitArrayIndexToContentIndex(currentIndex)];
+				} else if( valToTest > currentValue ) {
+					minIndex = currentIndex;
+				} else {
+					maxIndex = currentIndex;
+				}
+			}
+			if( testWithinMargin( splitArray[minIndex], valToTest ) ) {
+				return [splitArrayIndexToContentIndex(minIndex)];
+			} else if( testWithinMargin( splitArray[maxIndex], valToTest ) ) {
+				return [splitArrayIndexToContentIndex(maxIndex)];
+			} else {
+				const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
+				var recursive = testNearSplitRecursive(percentVector,content[childIndex],!isCurrentSplitterVertical);
+				if( recursive===null ) {
+					return null;
+				}
+				recursive.unshift(childIndex);
+				return recursive;
+			}
+		} else {
+			return null;
+		}
+	}
+
+	const mouseMoved = (e) => {
+		const percent = eventToPercentVector(e);
+		const nearSplit = testNearSplit(percent);
+		const target = e.currentTarget;
+		var cursorToUse;
+		if( nearSplit===null ) {
+			cursorToUse = "default";
+		} else {
+			var isVertical;
+
+			if( layout.areTopLevelSplittersVertical ) {
+				isVertical = true;
+			} else {
+				isVertical = false;
+			}
+
+			if( nearSplit.length%2 === 0 ) {
+				isVertical = !isVertical;
+			}
+
+			if( isVertical ) {
+				cursorToUse = "col-resize";
+			} else {
+				cursorToUse = "row-resize";
+			}
+		}
+		//console.log(`near split=${}`);
+		target.style.cursor = cursorToUse;
+	}
+
+	const generateDOM = layout => {
+		return (
+		<div style={{ width: "100%", height: "100%"}}
+				onMouseMove={mouseMoved}>
+			{generateContent(layout.content,layout.areTopLevelSplittersVertical)}
+		</div>);
+	}
+
+	const generateContent = (layout,isCurrentSplitterVertical) => {
 
 		var styleGenerator;
-		if( isDirectionHorizontal ) {
+		if( isCurrentSplitterVertical ) {
 			styleGenerator = percent => { return { height: "100%", width: percent+"%", overflow: "auto" } };
 		} else {
 			styleGenerator = percent => { return { height: percent+"%", width: "100%", overflow: "auto" } };
@@ -33,7 +133,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 						throw "Expect content array to have odd number of elements.  Children name strings with splitter percentages between.";
 					}
 					elements.push( {
-						child: generateContent(layout[i],!isDirectionHorizontal)
+						child: generateContent(layout[i],!isCurrentSplitterVertical)
 					});
 				}
 
@@ -44,7 +144,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 				content =
 					<div style={{display:"flex",
-							flexDirection:isDirectionHorizontal ? "row" : "column",
+							flexDirection:isCurrentSplitterVertical ? "row" : "column",
 							width: "100%",
 							height: "100%"}}>
 						{elements.map( (element,index) => (

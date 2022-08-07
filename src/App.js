@@ -69,7 +69,7 @@ function App() {
 					<div id="one" className="blah" onClick={clickMe}>
 						<p>Click me1!</p>
 						<p>One</p>
-						<p>to make area larger</p>
+						<p>to make area really large</p>
 					</div>
 					<div id="two" className="blah" onClick={clickMe}>
 						<p>Click me again!</p>
