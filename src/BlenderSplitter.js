@@ -2,6 +2,8 @@ import { useState } from "react";
 
 const BlenderSplitter = ( {children, layout} ) => {
 
+	const [layoutState, setLayoutState] = useState(layout);
+
 	const childMap = {};
 	children.forEach( e => childMap[ e.props.id ] = e );
 
@@ -13,7 +15,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 	}
 
 	const testNearSplit = percentVector => {
-		return testNearSplitRecursive(percentVector,layout.content,layout.areTopLevelSplittersVertical);
+		return testNearSplitRecursive(percentVector,layoutState.content,layoutState.areTopLevelSplittersVertical);
 	}
 
 	const contentArrayToSplitArray = content => {
@@ -36,13 +38,11 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 		if( Array.isArray(content) ) {
 			const splitArray = contentArrayToSplitArray(content);
-			//console.log("splitArray="+splitArray);
 			var minIndex = 0;
 			var maxIndex = splitArray.length-1;
 			while(minIndex+1<maxIndex) {
 				const currentIndex = Math.floor(minIndex+maxIndex/2);
 				const currentValue = splitArray[currentIndex];
-				//console.log(`minIndex=${minIndex} maxIndex=${maxIndex} currentIndex=${currentIndex} currentValue=${currentValue}`);
 				if( testWithinMargin( currentValue, valToTest ) ) {
 					return [splitArrayIndexToContentIndex(currentIndex)];
 				} else if( valToTest > currentValue ) {
@@ -51,18 +51,36 @@ const BlenderSplitter = ( {children, layout} ) => {
 					maxIndex = currentIndex;
 				}
 			}
-			if( testWithinMargin( splitArray[minIndex], valToTest ) ) {
+
+			const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
+			var subPercentVector;
+
+			const minValue = splitArray[minIndex];
+			const maxValue = splitArray[maxIndex];
+
+			const convFunction = val => 100*(val-minValue)/(maxValue-minValue);
+
+			if( isCurrentSplitterVertical ) {
+				subPercentVector = {
+					x: convFunction(percentVector.x),
+					y: percentVector.y
+				};
+			} else {
+				subPercentVector = {
+					x: percentVector.x,
+					y: convFunction(percentVector.y)
+				};
+			}
+			var recursive = testNearSplitRecursive(subPercentVector,content[childIndex],!isCurrentSplitterVertical);
+			if( recursive!==null ) {
+				recursive.unshift(childIndex);
+				return recursive;
+			} else if( testWithinMargin( splitArray[minIndex], valToTest ) ) {
 				return [splitArrayIndexToContentIndex(minIndex)];
 			} else if( testWithinMargin( splitArray[maxIndex], valToTest ) ) {
 				return [splitArrayIndexToContentIndex(maxIndex)];
 			} else {
-				const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
-				var recursive = testNearSplitRecursive(percentVector,content[childIndex],!isCurrentSplitterVertical);
-				if( recursive===null ) {
-					return null;
-				}
-				recursive.unshift(childIndex);
-				return recursive;
+				return null;
 			}
 		} else {
 			return null;
@@ -72,42 +90,46 @@ const BlenderSplitter = ( {children, layout} ) => {
 	const mouseMoved = (e) => {
 		const percent = eventToPercentVector(e);
 		const nearSplit = testNearSplit(percent);
+		console.log(`nearSplit=${nearSplit}`);
 		const target = e.currentTarget;
 		var cursorToUse;
 		if( nearSplit===null ) {
 			cursorToUse = "default";
 		} else {
-			var isVertical;
-
-			if( layout.areTopLevelSplittersVertical ) {
-				isVertical = true;
+			if(e.ctrlKey) {
+				cursorToUse = "copy";
 			} else {
-				isVertical = false;
-			}
+				var isVertical;
 
-			if( nearSplit.length%2 === 0 ) {
-				isVertical = !isVertical;
-			}
+				if( layoutState.areTopLevelSplittersVertical ) {
+					isVertical = true;
+				} else {
+					isVertical = false;
+				}
 
-			if( isVertical ) {
-				cursorToUse = "col-resize";
-			} else {
-				cursorToUse = "row-resize";
+				if( nearSplit.length%2 === 0 ) {
+					isVertical = !isVertical;
+				}
+
+				if( isVertical ) {
+					cursorToUse = "col-resize";
+				} else {
+					cursorToUse = "row-resize";
+				}
 			}
 		}
-		//console.log(`near split=${}`);
 		target.style.cursor = cursorToUse;
 	}
 
-	const generateDOM = layout => {
+	const generateDOM = layoutState => {
 		return (
 		<div style={{ width: "100%", height: "100%"}}
 				onMouseMove={mouseMoved}>
-			{generateContent(layout.content,layout.areTopLevelSplittersVertical)}
+			{generateContent(layoutState.content,layoutState.areTopLevelSplittersVertical)}
 		</div>);
 	}
 
-	const generateContent = (layout,isCurrentSplitterVertical) => {
+	const generateContent = (layoutState,isCurrentSplitterVertical) => {
 
 		var styleGenerator;
 		if( isCurrentSplitterVertical ) {
@@ -117,23 +139,23 @@ const BlenderSplitter = ( {children, layout} ) => {
 		}
 
 		var content;
-		if( Array.isArray(layout) ) {
-			if( layout.length>0 ) {
+		if( Array.isArray(layoutState) ) {
+			if( layoutState.length>0 ) {
 				var lastPercent=0;
 				var elements=[{
-					child: childMap[ layout[0] ]
+					child: generateContent(layoutState[0],!isCurrentSplitterVertical)
 				}];
-				for(var i=1;i<layout.length;i++) {
-					var element = layout[i];
+				for(var i=1;i<layoutState.length;i++) {
+					var element = layoutState[i];
 					const elementPercent = element-lastPercent;
 					elements[elements.length-1].percent = elementPercent;
 					lastPercent += elementPercent;
 					i++;
-					if(i>=layout.length) {
+					if(i>=layoutState.length) {
 						throw "Expect content array to have odd number of elements.  Children name strings with splitter percentages between.";
 					}
 					elements.push( {
-						child: generateContent(layout[i],!isCurrentSplitterVertical)
+						child: generateContent(layoutState[i],!isCurrentSplitterVertical)
 					});
 				}
 
@@ -156,14 +178,13 @@ const BlenderSplitter = ( {children, layout} ) => {
 				content = <p>no child!</p>;
 			}
 		} else {
-			content = childMap[layout];
+			content = childMap[layoutState];
 		}
 
 		return content;
 	}
 
-	return generateDOM(layout);
-
+	return generateDOM(layoutState);
 }
 	//return (
 	//	<div
