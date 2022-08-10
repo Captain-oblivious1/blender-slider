@@ -83,7 +83,12 @@ const BlenderSplitter = ( {children, layout} ) => {
 				return null;
 			}
 		} else {
-			return null;
+			if( testWithinMargin( 0, valToTest ) ) {
+				return [-1];
+			} else if ( testWithinMargin( 100, valToTest ) ) {
+				return [1];
+			} else
+				return null;
 		}
 	}
 
