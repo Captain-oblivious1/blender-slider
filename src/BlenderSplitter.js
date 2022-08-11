@@ -33,23 +33,43 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 	const testWithinMargin = (one, two) => Math.abs(one - two) <= reshapeMargin;
 
+	const binarySearch = (array,testForMe) => {
+		var minIndex = 0;
+		var maxIndex = array.length-1;
+		var found = false;
+		var currentIndex;
+		while(minIndex+1<maxIndex) {
+			currentIndex = Math.floor(minIndex+maxIndex/2);
+			const currentValue = array[currentIndex];
+			if( testWithinMargin( currentValue, testForMe ) ) {
+				found = true;
+				break;
+			} else if( testForMe > currentValue ) {
+				minIndex = currentIndex;
+			} else {
+				maxIndex = currentIndex;
+			}
+		}
+
+		if (!found) {
+			currentIndex = null;
+		}
+
+		return {
+			foundIndex: currentIndex,
+			minIndex: minIndex,
+			maxIndex: maxIndex
+		}
+	}
+
 	const testNearSplitRecursive = (percentVector,content,isCurrentSplitterVertical) => {
 		const valToTest = isCurrentSplitterVertical ? percentVector.x : percentVector.y;
 
 		if( Array.isArray(content) ) {
 			const splitArray = contentArrayToSplitArray(content);
-			var minIndex = 0;
-			var maxIndex = splitArray.length-1;
-			while(minIndex+1<maxIndex) {
-				const currentIndex = Math.floor(minIndex+maxIndex/2);
-				const currentValue = splitArray[currentIndex];
-				if( testWithinMargin( currentValue, valToTest ) ) {
-					return [splitArrayIndexToContentIndex(currentIndex)];
-				} else if( valToTest > currentValue ) {
-					minIndex = currentIndex;
-				} else {
-					maxIndex = currentIndex;
-				}
+			const {foundIndex,minIndex,maxIndex} = binarySearch(splitArray,valToTest);
+			if( foundIndex!==null ) {
+				return [splitArrayIndexToContentIndex(foundIndex)];
 			}
 
 			const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
