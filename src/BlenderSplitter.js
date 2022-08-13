@@ -14,35 +14,42 @@ const BlenderSplitter = ( {children, layout} ) => {
 			y: (e.clientY-rect.top)/(rect.bottom-rect.top) * 100 };
 	}
 
-	const testNearSplit = percentVector => {
-		return testNearSplitRecursive(percentVector,layoutState.content,layoutState.areTopLevelSplittersVertical);
-	}
-
-	const contentArrayToSplitArray = content => {
-		var percentArray=[0];
-		for(var i=1;i<content.length;i+=2) {
-			percentArray.push(content[i]);
-		}
-		percentArray.push(100);
-		return percentArray;
-	}
-
-	const splitArrayIndexToContentIndex = index => index*2-1;
-
 	const reshapeMargin = 1;
 
-	const testWithinMargin = (one, two) => Math.abs(one - two) <= reshapeMargin;
+	const testNearSplit = percentVector => {
+		console.log("--------- in testNearSplit ---------");
+		return testNearSplitRecursive(percentVector,layoutState.content,{x:reshapeMargin,y:reshapeMargin},layoutState.areTopLevelSplittersVertical);
+	}
 
-	const binarySearch = (array,testForMe) => {
-		var minIndex = 0;
-		var maxIndex = array.length-1;
-		var found = false;
+	//const contentArrayToSplitArray = content => {
+	//	var percentArray=[0];
+	//	for(var i=1;i<content.length;i+=2) {
+	//		percentArray.push(content[i]);
+	//	}
+	//	percentArray.push(100);
+	//	return percentArray;
+	//}
+
+	//const splitArrayIndexToContentIndex = index => index*2-1;
+
+
+	const testWithinMargin = (one, two, margin) => Math.abs(one - two) <= margin;
+
+	const binarySearch = (content,testForMe,margin) => {
+
+		var minIndex = -1;
+		var maxIndex = content.length;
+		var foundSplitIndex = null;
 		var currentIndex;
-		while(minIndex+1<maxIndex) {
-			currentIndex = Math.floor(minIndex+maxIndex/2);
-			const currentValue = array[currentIndex];
-			if( testWithinMargin( currentValue, testForMe ) ) {
-				found = true;
+
+		while(minIndex+2<maxIndex) {
+			currentIndex = (minIndex+maxIndex)/2;
+			if( currentIndex%2===0 ) {
+				currentIndex--;
+			}
+			const currentValue = content[currentIndex];
+			if( testWithinMargin( currentValue, testForMe, margin ) ) {
+				foundSplitIndex = currentIndex;
 				break;
 			} else if( testForMe > currentValue ) {
 				minIndex = currentIndex;
@@ -51,74 +58,214 @@ const BlenderSplitter = ( {children, layout} ) => {
 			}
 		}
 
-		if (!found) {
-			currentIndex = null;
+		var foundComponentIndex;
+		if (foundSplitIndex==null) {
+			foundComponentIndex = minIndex+1;
+		} else {
+			foundComponentIndex = null;
 		}
 
 		return {
-			foundIndex: currentIndex,
-			minIndex: minIndex,
-			maxIndex: maxIndex
+			foundSplitIndex: foundSplitIndex,
+			foundComponentIndex: foundComponentIndex
 		}
 	}
 
-	const testNearSplitRecursive = (percentVector,content,isCurrentSplitterVertical) => {
-		const valToTest = isCurrentSplitterVertical ? percentVector.x : percentVector.y;
-
-		if( Array.isArray(content) ) {
-			const splitArray = contentArrayToSplitArray(content);
-			const {foundIndex,minIndex,maxIndex} = binarySearch(splitArray,valToTest);
-			if( foundIndex!==null ) {
-				return [splitArrayIndexToContentIndex(foundIndex)];
-			}
-
-			const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
-			var subPercentVector;
-
-			const minValue = splitArray[minIndex];
-			const maxValue = splitArray[maxIndex];
-
-			const convFunction = val => 100*(val-minValue)/(maxValue-minValue);
-
-			if( isCurrentSplitterVertical ) {
-				subPercentVector = {
-					x: convFunction(percentVector.x),
-					y: percentVector.y
-				};
-			} else {
-				subPercentVector = {
-					x: percentVector.x,
-					y: convFunction(percentVector.y)
-				};
-			}
-			var recursive = testNearSplitRecursive(subPercentVector,content[childIndex],!isCurrentSplitterVertical);
-			if( recursive!==null ) {
-				recursive.unshift(childIndex);
-				return recursive;
-			} else if( testWithinMargin( splitArray[minIndex], valToTest ) ) {
-				return [splitArrayIndexToContentIndex(minIndex)];
-			} else if( testWithinMargin( splitArray[maxIndex], valToTest ) ) {
-				return [splitArrayIndexToContentIndex(maxIndex)];
-			} else {
-				return null;
-			}
+	const testNearSplitRecursive = (percentVector,content,margin,isCurrentSplitterVertical) => {
+		var valToTest;
+		var marginToTest;
+		if( isCurrentSplitterVertical ) {
+			valToTest = percentVector.x;
+			marginToTest = margin.x;
 		} else {
-			if( testWithinMargin( 0, valToTest ) ) {
-				return [-1];
-			} else if ( testWithinMargin( 100, valToTest ) ) {
-				return [1];
-			} else
-				return null;
+			valToTest = percentVector.y;
+			marginToTest = margin.y;
 		}
+
+		console.log(`entered recursive percentVector=(${percentVector.x},${percentVector.y}) content=${content} valToTest=${valToTest} margin=${margin}`);
+
+		const isArray = Array.isArray(content);
+		const length = isArray ? content.length : null;
+
+		var foundIndex;
+		var childCandidateIndices;
+		if( testWithinMargin( valToTest, 0, marginToTest ) ) { // is at min edge
+			console.log("first if");
+			foundIndex = -1;
+			childCandidateIndices = isArray ? [ 0 ] : null;
+		} else if( testWithinMargin( valToTest, 100, marginToTest ) ) { // is at max edge
+			console.log("else if");
+			if( isArray ) {
+				foundIndex = length;
+				childCandidateIndices = [ length-1 ];
+			} else {
+				foundIndex = 1;
+				childCandidateIndices = null;
+			}
+		} else { // is somewhere between
+			console.log("else");
+			if( isArray ) {
+				const {foundSplitIndex,foundComponentIndex} = binarySearch(content,valToTest,marginToTest);
+				foundIndex = foundSplitIndex;
+				if( foundIndex==null ) {
+					childCandidateIndices = [ foundComponentIndex ];
+				} else {
+					childCandidateIndices = [ foundSplitIndex-1, foundSplitIndex+1 ];
+				}
+			} else {
+				foundIndex = null;
+				childCandidateIndices = null;
+			}
+		}
+
+		console.log(`foundIndex=${foundIndex} childCandidates=${childCandidateIndices}`);
+
+		var returnMe = [];
+		if( isArray ) {
+			childCandidateIndices.forEach( childIndex => {
+				const minValue = childIndex===0 ? 0 : content[childIndex-1];
+				const maxValue = childIndex===length-1 ? length-1 : content[childIndex+1];
+
+				const convFunction = val => 100*(val-minValue)/(maxValue-minValue);
+				const marginFunction = val => val*100/(maxValue-minValue);
+
+				var subPercentVector;
+				var subMargin;
+				if( isCurrentSplitterVertical ) {
+					subPercentVector = {
+						x: convFunction(percentVector.x),
+						y: percentVector.y
+					};
+					subMargin = {
+						x: marginFunction(margin.x),
+						y: margin.y
+					};
+				} else {
+					subPercentVector = {
+						x: percentVector.x,
+						y: convFunction(percentVector.y)
+					};
+					subMargin = {
+						x: margin.x,
+						y: marginFunction(margin.y)
+					};
+				}
+
+				var recurseArray = testNearSplitRecursive(subPercentVector,content[childIndex],subMargin,!isCurrentSplitterVertical);
+				printArray("returned",recurseArray);
+				console.log("recurseArray.length="+recurseArray.length);
+				if( recurseArray.length>0 ) {
+					recurseArray.forEach( subArray => {
+						var myArray = [childIndex];
+						myArray = myArray.concat(subArray);
+						console.log(`myArray=${myArray}`);
+						returnMe.push(myArray);
+					});
+					printArray("returnMe",returnMe);
+				} else {
+					if( foundIndex!==null ) {
+						returnMe.push([foundIndex]);
+					}
+				}
+			});
+		} else {
+			if( foundIndex!==null ) {
+				returnMe.push([foundIndex]);
+			}
+		}
+		printArray("returning",returnMe);
+		return returnMe;
+		//var retVal = null;
+		//if( Array.isArray(content) ) {
+		//	//const splitArray = contentArrayToSplitArray(content);
+		//	//const {foundIndex,minIndex,maxIndex} = binarySearch(splitArray,valToTest);
+		//	const {foundIndex,minIndex,maxIndex} = binarySearch(content,valToTest);
+		//	if( foundIndex!==null ) {
+		//		//const contextIndex =splitArrayIndexToContentIndex(foundIndex);
+		//		//retVal = [contextIndex];
+		//		retVal = foundIndex;
+		//	} else {
+
+		//		//const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
+		//		const childIndex = foundIndex+1;
+		//		var subPercentVector;
+
+		//		//const minValue = splitArray[minIndex];
+		//		//const maxValue = splitArray[maxIndex];
+		//		const minValue = content[minIndex];
+		//		const maxValue = content[maxIndex];
+
+		//		const convFunction = val => 100*(val-minValue)/(maxValue-minValue);
+
+		//		if( isCurrentSplitterVertical ) {
+		//			subPercentVector = {
+		//				x: convFunction(percentVector.x),
+		//				y: percentVector.y
+		//			};
+		//		} else {
+		//			subPercentVector = {
+		//				x: percentVector.x,
+		//				y: convFunction(percentVector.y)
+		//			};
+		//		}
+		//		var recursive = testNearSplitRecursive(subPercentVector,content[childIndex],!isCurrentSplitterVertical);
+		//		if( recursive!==null ) {
+		//			recursive.unshift(childIndex);
+		//			retVal = recursive;
+		//		//} else if( testWithinMargin( splitArray[minIndex], valToTest ) ) {
+		//		//	retVal = [splitArrayIndexToContentIndex(minIndex)];
+		//		//} else if( testWithinMargin( splitArray[maxIndex], valToTest ) ) {
+		//		//	retVal = [splitArrayIndexToContentIndex(maxIndex)];
+		//		}
+		//	}
+		//} else {
+		//	if( testWithinMargin( 0, valToTest ) ) {
+		//		retVal = [-1];
+		//	} else if ( testWithinMargin( 100, valToTest ) ) {
+		//		retVal = [1];
+		//	}
+		//}
+
+		//return retVal;
 	}
+
+	const arrayToStringRecursive = (a,str) => {
+		if( Array.isArray(a) ) {
+			str = str.concat("[");
+			var first = true;
+			a.forEach( e => {
+				if( first ) {
+					first = false;
+				} else {
+					str = str.concat(",");
+				}
+				str = arrayToStringRecursive(e,str);
+			});
+			str = str.concat("]");
+		} else {
+			str = str.concat(a);
+		}
+		//console.log("about to return str="+str);
+		return str;
+	}
+
+	const arrayToString = (a) => {
+		return arrayToStringRecursive(a,"");
+	}
+
+	const printArray = (label,a) => {
+		console.log(`${label}=${arrayToString(a)}`);
+	}
+
+	//printArray(["one",["two","three"],"four"]);
 
 	const mouseMoved = (e) => {
 		const percent = eventToPercentVector(e);
 		const nearSplit = testNearSplit(percent);
-		console.log(`nearSplit=${nearSplit}`);
+		printArray("mouseMoved",nearSplit);
 		const target = e.currentTarget;
 		var cursorToUse;
-		if( nearSplit===null ) {
+		if( nearSplit.length===0 || nearSplit.length>2 ) {
 			cursorToUse = "default";
 		} else {
 			if(e.ctrlKey) {
@@ -132,7 +279,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 					isVertical = false;
 				}
 
-				if( nearSplit.length%2 === 0 ) {
+				if( nearSplit[0].length%2 === 0 ) {
 					isVertical = !isVertical;
 				}
 

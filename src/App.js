@@ -23,10 +23,10 @@ function App() {
 	//     └─────────┘
 
 
-	const layout2 = {
+	const layout1 = {
 		areTopLevelSplittersVertical: false,
 
-		content: ["one"]
+		content: "one"
 	};
 
 	const layout3 = {
@@ -62,12 +62,20 @@ function App() {
 			"one",
 			20,
 			[
+				"four",
+				20,
 				[
 					"three",
 					30,
 					"one"
 				],
 				40,
+				[
+					"one",
+					30,
+					"three"
+				],
+				70,
 				"two",
 			],
 			80,
