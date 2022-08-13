@@ -20,18 +20,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return testNearSplitRecursive(percentVector,layoutState.content,{x:reshapeMargin,y:reshapeMargin},layoutState.areTopLevelSplittersVertical);
 	}
 
-	//const contentArrayToSplitArray = content => {
-	//	var percentArray=[0];
-	//	for(var i=1;i<content.length;i+=2) {
-	//		percentArray.push(content[i]);
-	//	}
-	//	percentArray.push(100);
-	//	return percentArray;
-	//}
-
-	//const splitArrayIndexToContentIndex = index => index*2-1;
-
-
 	const testWithinMargin = (one, two, margin) => Math.abs(one - two) <= margin;
 
 	const binarySearch = (content,testForMe,margin) => {
@@ -163,60 +151,9 @@ const BlenderSplitter = ( {children, layout} ) => {
 		}
 
 		return returnMe;
-		//var retVal = null;
-		//if( Array.isArray(content) ) {
-		//	//const splitArray = contentArrayToSplitArray(content);
-		//	//const {foundIndex,minIndex,maxIndex} = binarySearch(splitArray,valToTest);
-		//	const {foundIndex,minIndex,maxIndex} = binarySearch(content,valToTest);
-		//	if( foundIndex!==null ) {
-		//		//const contextIndex =splitArrayIndexToContentIndex(foundIndex);
-		//		//retVal = [contextIndex];
-		//		retVal = foundIndex;
-		//	} else {
-
-		//		//const childIndex = splitArrayIndexToContentIndex(minIndex)+1;
-		//		const childIndex = foundIndex+1;
-		//		var subPercentVector;
-
-		//		//const minValue = splitArray[minIndex];
-		//		//const maxValue = splitArray[maxIndex];
-		//		const minValue = content[minIndex];
-		//		const maxValue = content[maxIndex];
-
-		//		const convFunction = val => 100*(val-minValue)/(maxValue-minValue);
-
-		//		if( isCurrentSplitterVertical ) {
-		//			subPercentVector = {
-		//				x: convFunction(percentVector.x),
-		//				y: percentVector.y
-		//			};
-		//		} else {
-		//			subPercentVector = {
-		//				x: percentVector.x,
-		//				y: convFunction(percentVector.y)
-		//			};
-		//		}
-		//		var recursive = testNearSplitRecursive(subPercentVector,content[childIndex],!isCurrentSplitterVertical);
-		//		if( recursive!==null ) {
-		//			recursive.unshift(childIndex);
-		//			retVal = recursive;
-		//		//} else if( testWithinMargin( splitArray[minIndex], valToTest ) ) {
-		//		//	retVal = [splitArrayIndexToContentIndex(minIndex)];
-		//		//} else if( testWithinMargin( splitArray[maxIndex], valToTest ) ) {
-		//		//	retVal = [splitArrayIndexToContentIndex(maxIndex)];
-		//		}
-		//	}
-		//} else {
-		//	if( testWithinMargin( 0, valToTest ) ) {
-		//		retVal = [-1];
-		//	} else if ( testWithinMargin( 100, valToTest ) ) {
-		//		retVal = [1];
-		//	}
-		//}
-
-		//return retVal;
 	}
 
+	// Just for printing.
 	const arrayToStringRecursive = (a,str) => {
 		if( Array.isArray(a) ) {
 			str = str.concat("[");
@@ -237,10 +174,12 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return str;
 	}
 
+	// Just for printing.
 	const arrayToString = (a) => {
 		return arrayToStringRecursive(a,"");
 	}
 
+	// Just for printing.
 	const printArray = (label,a) => {
 		console.log(`${label}=${arrayToString(a)}`);
 	}
