@@ -17,7 +17,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 	const reshapeMargin = 1;
 
 	const testNearSplit = percentVector => {
-		console.log("--------- in testNearSplit ---------");
 		return testNearSplitRecursive(percentVector,layoutState.content,{x:reshapeMargin,y:reshapeMargin},layoutState.areTopLevelSplittersVertical);
 	}
 
@@ -82,19 +81,15 @@ const BlenderSplitter = ( {children, layout} ) => {
 			marginToTest = margin.y;
 		}
 
-		console.log(`entered recursive percentVector=(${percentVector.x},${percentVector.y}) content=${content} valToTest=${valToTest} margin=${margin}`);
-
 		const isArray = Array.isArray(content);
 		const length = isArray ? content.length : null;
 
 		var foundIndex;
 		var childCandidateIndices;
 		if( testWithinMargin( valToTest, 0, marginToTest ) ) { // is at min edge
-			console.log("first if");
 			foundIndex = -1;
 			childCandidateIndices = isArray ? [ 0 ] : null;
 		} else if( testWithinMargin( valToTest, 100, marginToTest ) ) { // is at max edge
-			console.log("else if");
 			if( isArray ) {
 				foundIndex = length;
 				childCandidateIndices = [ length-1 ];
@@ -103,7 +98,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 				childCandidateIndices = null;
 			}
 		} else { // is somewhere between
-			console.log("else");
 			if( isArray ) {
 				const {foundSplitIndex,foundComponentIndex} = binarySearch(content,valToTest,marginToTest);
 				foundIndex = foundSplitIndex;
@@ -117,8 +111,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 				childCandidateIndices = null;
 			}
 		}
-
-		console.log(`foundIndex=${foundIndex} childCandidates=${childCandidateIndices}`);
 
 		var returnMe = [];
 		if( isArray ) {
@@ -152,16 +144,12 @@ const BlenderSplitter = ( {children, layout} ) => {
 				}
 
 				var recurseArray = testNearSplitRecursive(subPercentVector,content[childIndex],subMargin,!isCurrentSplitterVertical);
-				printArray("returned",recurseArray);
-				console.log("recurseArray.length="+recurseArray.length);
 				if( recurseArray.length>0 ) {
 					recurseArray.forEach( subArray => {
 						var myArray = [childIndex];
 						myArray = myArray.concat(subArray);
-						console.log(`myArray=${myArray}`);
 						returnMe.push(myArray);
 					});
-					printArray("returnMe",returnMe);
 				} else {
 					if( foundIndex!==null ) {
 						returnMe.push([foundIndex]);
@@ -173,7 +161,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 				returnMe.push([foundIndex]);
 			}
 		}
-		printArray("returning",returnMe);
+
 		return returnMe;
 		//var retVal = null;
 		//if( Array.isArray(content) ) {
@@ -257,37 +245,40 @@ const BlenderSplitter = ( {children, layout} ) => {
 		console.log(`${label}=${arrayToString(a)}`);
 	}
 
-	//printArray(["one",["two","three"],"four"]);
-
 	const mouseMoved = (e) => {
 		const percent = eventToPercentVector(e);
 		const nearSplit = testNearSplit(percent);
-		printArray("mouseMoved",nearSplit);
+
+		//if(nearSplit.length>0)
+		//	printArray("mouseMoved",nearSplit);
+
 		const target = e.currentTarget;
 		var cursorToUse;
-		if( nearSplit.length===0 || nearSplit.length>2 ) {
-			cursorToUse = "default";
-		} else {
-			if(e.ctrlKey) {
+		if(e.ctrlKey) {
+			if( nearSplit.length<3 ) {
 				cursorToUse = "copy";
 			} else {
-				var isVertical;
+				cursorToUse = "default";
+			}
+		} else if( nearSplit.length!==2 ) {
+			cursorToUse = "default";
+		} else {
+			var isVertical;
 
-				if( layoutState.areTopLevelSplittersVertical ) {
-					isVertical = true;
-				} else {
-					isVertical = false;
-				}
+			if( layoutState.areTopLevelSplittersVertical ) {
+				isVertical = true;
+			} else {
+				isVertical = false;
+			}
 
-				if( nearSplit[0].length%2 === 0 ) {
-					isVertical = !isVertical;
-				}
+			if( nearSplit[0].length%2 === 0 ) {
+				isVertical = !isVertical;
+			}
 
-				if( isVertical ) {
-					cursorToUse = "col-resize";
-				} else {
-					cursorToUse = "row-resize";
-				}
+			if( isVertical ) {
+				cursorToUse = "col-resize";
+			} else {
+				cursorToUse = "row-resize";
 			}
 		}
 		target.style.cursor = cursorToUse;
