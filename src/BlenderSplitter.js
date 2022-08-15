@@ -7,6 +7,20 @@ const BlenderSplitter = ( {children, layout} ) => {
 	const childMap = {};
 	children.forEach( e => childMap[ e.props.id ] = e );
 
+	const StateEnum = {
+		None: "None",
+		ElgibleToMove: "ElgibleToMove",
+		AboutToMove: "AboutToMove",
+		Moving: "Moving",
+		ElgibleToCopy: "ElgibleToCopy",
+		AboutToCopy: "AboutToCopy",
+		Copying: "Copying"
+	}
+
+	const [state, setState] = useState( {
+		stateEnum: StateEnum.None,
+	} );
+
 	const eventToPercentVector = e => {
 		const rect = e.currentTarget.getBoundingClientRect();
 		return {
@@ -184,24 +198,99 @@ const BlenderSplitter = ( {children, layout} ) => {
 		console.log(`${label}=${arrayToString(a)}`);
 	}
 
-	const mouseMoved = (e) => {
+	const determineState = (e) => {
 		const percent = eventToPercentVector(e);
 		const nearSplit = testNearSplit(percent);
+		const length = nearSplit.length;
+		const stateEnum = state.stateEnum;
 
-		//if(nearSplit.length>0)
-		//	printArray("mouseMoved",nearSplit);
+		// by default, assume old state
+		var nextState = state;
 
+		const isPressedNow = e.buttons &= 1;
+		if( isPressedNow ) {
+			const currentLocation = eventToPercentVector(e);
+			if( stateEnum===StateEnum.None
+					|| stateEnum===StateEnum.ElgibleToCopy
+					|| stateEnum===StateEnum.ElgibleToMove ) {
+				if(e.ctrlKey) {
+					if( length>0 && length<3 ) {
+						nextState = {
+							stateEnum: StateEnum.AboutToCopy,
+							nearSplit: nearSplit,
+							pressLocation: currentLocation
+						};
+					}
+				} else {
+					if( length>1 && length<3 ) {
+						nextState = {
+							stateEnum: StateEnum.AboutToMove,
+							nearSplit: nearSplit,
+							pressLocation: currentLocation
+						};
+					}
+				}
+			} else if( stateEnum===StateEnum.AboutToCopy ) {
+				if( JSON.stringify(nearSplit) !== JSON.stringify(state.nearSplit) ) {
+					console.log("Copying!!");
+					nextState = {
+						stateEnum: StateEnum.Copying,
+						split: null,
+					}
+				}
+
+			} else if( stateEnum===StateEnum.AboutToMove ) {
+				if( JSON.stringify(nearSplit) !== JSON.stringify(state.nearSplit) ) {
+					var minSplit= state.nearSplit[0].length < state.nearSplit[1].length ? state.nearSplit[0] : state.nearSplit[1];
+					printArray("nearSplit",state.nearSplit);
+					printArray("minSplit",minSplit);
+					nextState = {
+						stateEnum: StateEnum.Moving,
+						split: minSplit,
+						pressLocation: state.pressLocation,
+						currentLocation: percent
+					}
+					console.log("Moving split="+nextState.split+"!!");
+				}
+			} else if( stateEnum===StateEnum.Copying ) {
+			} else if( stateEnum===StateEnum.Moving ) {
+				nextState = {
+					stateEnum: StateEnum.Moving,
+					split: state.split,
+					pressLocation: state.pressLocation,
+					currentLocation: percent
+				}
+			}
+		} else if(e.ctrlKey) {
+			if( length>0 && length<3 ) {
+				nextState = {
+					stateEnum: StateEnum.ElgibleToCopy,
+					nearSplit: nearSplit
+				};
+			} else {
+				nextState = {
+					stateEnum: StateEnum.None
+				};
+			}
+		} else if( length!==2 ) {
+			nextState = {
+				stateEnum: StateEnum.None
+			};
+		} else {
+			nextState = {
+				stateEnum: StateEnum.ElgibleToMove,
+				nearSplit: nearSplit
+			};
+		}
+
+		console.log("state="+nextState.stateEnum);
+		setState( nextState );
+	}
+
+	const updateCursor = e => {
 		const target = e.currentTarget;
 		var cursorToUse;
-		if(e.ctrlKey) {
-			if( nearSplit.length<3 ) {
-				cursorToUse = "copy";
-			} else {
-				cursorToUse = "default";
-			}
-		} else if( nearSplit.length!==2 ) {
-			cursorToUse = "default";
-		} else {
+		if( state.stateEnum===StateEnum.ElgibleToMove ) {
 			var isVertical;
 
 			if( layoutState.areTopLevelSplittersVertical ) {
@@ -210,7 +299,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 				isVertical = false;
 			}
 
-			if( nearSplit[0].length%2 === 0 ) {
+			if( state.nearSplit[0].length%2 === 0 ) {
 				isVertical = !isVertical;
 			}
 
@@ -219,14 +308,70 @@ const BlenderSplitter = ( {children, layout} ) => {
 			} else {
 				cursorToUse = "row-resize";
 			}
+		} else if( state.stateEnum===StateEnum.ElgibleToCopy ) {
+			cursorToUse = "copy";
+		} else {
+			cursorToUse = "default";
 		}
 		target.style.cursor = cursorToUse;
 	}
 
+	const deepContentCopy = (content) => {
+		if(Array.isArray(content)) {
+			var ret=[];
+			content.forEach( element => { ret.push( deepContentCopy(element) ); } );
+			return ret;
+		} else {
+			return content;
+		}
+	}
+
+	const moveSplit = (split, pressLocation, currentLocation) => {
+		var isVertical = layoutState.areTopLevelSplittersVertical;
+		if( split.length%2==0 )
+			isVertical = !isVertical;
+
+		var copy = deepContentCopy(layoutState.content);
+		var contentElement = copy;
+		split.forEach( e => contentElement = contentElement[e] );
+		contentElement+=1;
+		console.log(`contentElement=${contentElement}`);
+		setLayoutState(deepContentCopy);
+	}
+
+	const mouseMoved = (e) => {
+		determineState(e);
+		updateCursor(e);
+
+		//printArray("mouseMovedSplit",state.split);
+
+		if( state.stateEnum==StateEnum.Moving ) {
+			moveSplit(state.split,state.pressLocation,state.currentLocation);
+		}
+	}
+
+	const mouseDown = (e) => {
+		determineState(e);
+		updateCursor(e);
+	}
+
+	const mouseUp = (e) => {
+		determineState(e);
+		updateCursor(e);
+	}
+
+	const keyDown = (e) => {
+		console.log("keyDown! '"+e.key+"'");
+	}
+
 	const generateDOM = layoutState => {
 		return (
-		<div style={{ width: "100%", height: "100%"}}
-				onMouseMove={mouseMoved}>
+		<div style={{ width: "100%", height: "100%" }}
+				tabIndex={0}
+				onKeyDown={keyDown}
+				onMouseMove={mouseMoved}
+				onMouseDown={mouseDown}
+				onMouseUp={mouseUp}>
 			{generateContent(layoutState.content,layoutState.areTopLevelSplittersVertical)}
 		</div>);
 	}
@@ -270,7 +415,8 @@ const BlenderSplitter = ( {children, layout} ) => {
 					<div style={{display:"flex",
 							flexDirection:isCurrentSplitterVertical ? "row" : "column",
 							width: "100%",
-							height: "100%"}}>
+							height: "100%",
+					}}>
 						{elements.map( (element,index) => (
 						<div key={index} style={styleGenerator(element.percent)}>
 							{element.child}
