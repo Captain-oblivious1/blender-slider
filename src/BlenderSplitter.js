@@ -334,7 +334,12 @@ const BlenderSplitter = ( {children, layout} ) => {
 						chosenIndex = percent.y < state.pressLocation.y ? 0 : 1;
 						loc = percent.y;
 					}
-					const chosenSplit = state.splits[chosenIndex];
+					var chosenSplit;
+					if(state.splits.length==1) {
+						chosenSplit = state.splits[0];
+					} else {
+						chosenSplit = state.splits[chosenIndex];
+					}
 					printArray("chosenSplit before",chosenSplit);
 					insertSplit( chosenSplit, loc, chosenIndex===1 );
 					if(chosenIndex===1) {

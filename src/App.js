@@ -29,7 +29,7 @@ function App() {
 		content: "one"
 	};
 
-	const layout3 = {
+	const layout = {
 		areTopLevelSplittersVertical: true,
 
 		content: [
@@ -55,7 +55,7 @@ function App() {
 		]
 	};
 
-	const layout = {
+	const layout3 = {
 		areTopLevelSplittersVertical: false,
 
 		content: [
