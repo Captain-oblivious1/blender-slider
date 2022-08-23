@@ -24,7 +24,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		Moving: "Moving",
 		ElgibleToCopy: "ElgibleToCopy",
 		AboutToCopy: "AboutToCopy",
-		Copying: "Copying"
+		//Copying: "Copying"
 	}
 
 	const [state, setState] = useState( {
@@ -237,7 +237,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 	const isCopyState = stateEnum =>
 		stateEnum===StateEnum.ElgibleToCopy
 		|| stateEnum===StateEnum.AboutToCopy
-		|| stateEnum===StateEnum.Copying
+		//|| stateEnum===StateEnum.Copying
 
 	const setToNoneState = () => {
 		setState( {
@@ -278,47 +278,71 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
-	const setToAboutToCopyState = (split,pressLocation) => {
+	const setToAboutToCopyState = (splits,pressLocation) => {
 		setState( {
 			stateEnum: StateEnum.AboutToCopy,
-			split: split,
+			splits: splits,
 			pressLocation: pressLocation
 		} );
 	}
 
-	const setToCopyingState = () => {
-		setState( {
-			stateEnum: StateEnum.Copying,
-			split: null,
-		} );
-	}
+	//const setToCopyingState = (split) => {
+	//	console.log("copying split="+arrayToString(split));
+	//	setState( {
+	//		stateEnum: StateEnum.Copying,
+	//		split: split,
+	//	} );
+	//}
 
 	const determineState = (e) => {
 		const stateEnum = state.stateEnum;
 		const percent = eventToPercentVector(e);
+		//console.log(`percent=${pointToString(percent)}`);
 		const nearSplit = testNearSplit(percent,!isCopyState(stateEnum));
 		const length = nearSplit.length;
 		//printArray("nearSplit",nearSplit);
 
 		const isPressedNow = e.buttons &= 1;
 		if( isPressedNow ) {
-			const currentLocation = eventToPercentVector(e);
 			if( stateEnum===StateEnum.None
 					|| stateEnum===StateEnum.ElgibleToCopy
 					|| stateEnum===StateEnum.ElgibleToMove ) {
 				if(e.ctrlKey) {
 					if( length>0 && length<3 ) {
-						setToAboutToCopyState(nearSplit,currentLocation);
+						const nearSplits = testNearSplit(percent,false);
+						setToAboutToCopyState(nearSplits,percent);
 					}
 				} else {
-					//if( length>1 && length<3 ) {
 					if( length>0 ) {
-						setToAboutToMoveState(nearSplit,getSplitLocation(nearSplit[0]),currentLocation);
+						setToAboutToMoveState(nearSplit,getSplitLocation(nearSplit[0]),percent);
 					}
 				}
 			} else if( stateEnum===StateEnum.AboutToCopy ) {
-				if( JSON.stringify(nearSplit) !== JSON.stringify(state.nearSplit) ) {
-					setToCopyingState();
+				const nearSplits = testNearSplit(percent,false);
+				if( JSON.stringify(nearSplits) !== JSON.stringify(state.splits) ) {
+					printArray("splits",state.splits);
+					const isVertical = state.splits[0].length%2 === 1 ? layoutState.areTopLevelSplittersVertical : !layoutState.areTopLevelSplittersVertical;
+					var chosenIndex;
+					var loc;
+					console.log(`press=${pointToString(state.pressLocation)} percent=${pointToString(percent)}`);
+					if( isVertical ) {
+						console.log("isVertical");
+						chosenIndex = percent.x < state.pressLocation.x ? 0 : 1;
+						loc = percent.x;
+					} else {
+						console.log("is not Vertical");
+						chosenIndex = percent.y < state.pressLocation.y ? 0 : 1;
+						loc = percent.y;
+					}
+					const chosenSplit = state.splits[chosenIndex];
+					printArray("chosenSplit before",chosenSplit);
+					insertSplit( chosenSplit, loc, chosenIndex===1 );
+					if(chosenIndex===1) {
+						chosenSplit[ chosenSplit.length-1 ]+=2;
+					}
+					printArray("chosenSplit after",chosenSplit);
+					setToMovingState(chosenSplit,loc,percent,percent);
+					//setToCopyingState(chosenSplit);
 				}
 
 			} else if( stateEnum===StateEnum.AboutToMove ) {
@@ -329,7 +353,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 					setToMovingState(state.split[0],state.pressSplitLocation,state.pressMouseLocation,percent);
 					//console.log("Moving split="+nextState.split+"!!");
 				}
-			} else if( stateEnum===StateEnum.Copying ) {
+			//} else if( stateEnum===StateEnum.Copying ) {
 			} else if( stateEnum===StateEnum.Moving ) {
 				setToMovingState(state.split,state.pressSplitLocation,state.pressMouseLocation,percent);
 			}
@@ -411,26 +435,10 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 	const moveSplit = (movingState) => {
 		var isVertical = layoutState.areTopLevelSplittersVertical;
-		//if( split.length%2===0 )
-		//	isVertical = !isVertical;
-
 		var currentMouseLocation = movingState.currentMouseLocation;
-
-		//console.log(`pressMouseLocation=${JSON.stringify(pressMouseLocation)} currentMouseLocation=${JSON.stringify(currentMouseLocation)}`);
-		//var percentOffsetVector = {
-		//	x: currentMouseLocation.x-pressMouseLocation.x,
-		//	y: currentMouseLocation.y-pressMouseLocation.y
-		//};
-
-		//console.log(`percentOffsetVector=${pointToString(percentOffsetVector)}`);
-
-		//var splitLength = currentState.currentMouseInfo.maxSplit - currentState.currentMouseInfo.minSplit;
-		//var percentOffset = pixelOffset*100/splitLength;
-		//var newPercentages = [...currentState.splitPercentagesOnPress]
 
 		const split = movingState.split;
 		var parent = layoutState.content;
-		//printArray("split",split);
 		for( var i=0;i<split.length-1;i++) {
 			const component = split[i];
 			var minValue;
@@ -442,23 +450,40 @@ const BlenderSplitter = ( {children, layout} ) => {
 				minValue = parseFloat( parent[ component - 1 ] );
 				maxValue = parseFloat( parent[ component + 1 ] );
 			}
-			//console.log(`minValue=${minValue} maxValue=${maxValue}`);
 			currentMouseLocation = convertVector(minValue,maxValue,isVertical,currentMouseLocation);
-			//console.log(`currentMouseLocation=${pointToString(currentMouseLocation)}`);
 			isVertical = !isVertical;
 			parent = parent[ component ];
 		}
 
-//		const componentOffset = isVertical ? percentOffsetVector.x : percentOffsetVector.y;
-//		parent[ last ] = parent[ last ] + componentOffset;
-//		//console.log(`contentElement=${contentElement}`);
-//		printArray("aboutToSet",copyLayoutState.content);
-//		setLayoutState(copyLayoutState);
-		//var loc=movingState.pressSplitLocation;
-		//console.log("loc before="+loc);
 		var loc = isVertical ? currentMouseLocation.x : currentMouseLocation.y;
-		//console.log("loc="+loc);
 		setSplitLocation(movingState.split,loc);
+	}
+	
+	const insertSplit = (split, loc, isAfter) => {
+		console.log("copying split="+arrayToString(split));
+		var copy = deepContentCopy(layoutState.content);
+		var copyLayoutState = {
+			areTopLevelSplittersVertical: layoutState.areTopLevelSplittersVertical,
+			content: copy
+		};
+
+		var parent = copy;
+		for( var i=0;i<split.length-1;i++) {
+			parent = parent[ split[i] ];
+		}
+		const last = split[ split.length-1 ];
+		if(isAfter) {
+			console.log("after");
+			parent.splice( last+1, 0, loc );
+			parent.splice( last+1, 0, "chooser" );
+		} else {
+			console.log("before");
+			parent.splice( last, 0, "chooser" );
+			parent.splice( last, 0, loc );
+		}
+		printArray("before copy",layout.content);
+		printArray("after copy",copy);
+		setLayoutState(copyLayoutState);
 	}
 
 	const mouseMoved = (e) => {
@@ -483,16 +508,16 @@ const BlenderSplitter = ( {children, layout} ) => {
 		updateCursor(e);
 	}
 
-	const keyDown = (e) => {
-		console.log("keyDown! '"+e.key+"'");
-	}
+	//const keyDown = (e) => {
+	//	console.log("keyDown! '"+e.key+"'");
+	//}
+				//onKeyDown={keyDown}
 
 	const generateDOM = layoutState => {
 		//printArray("aboutToGenerateDom",layoutState.content);
 		return (
 		<div ref={ref} style={{ width: "100%", height: "100%" }}
 				tabIndex={0}
-				onKeyDown={keyDown}
 				onMouseMove={mouseMoved}
 				onMouseDown={mouseDown}
 				onMouseUp={mouseUp}>

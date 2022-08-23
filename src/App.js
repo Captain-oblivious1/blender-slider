@@ -79,7 +79,7 @@ function App() {
 				"two",
 			],
 			80,
-			"four"
+			"chooser"
 		]
 	};
 
@@ -88,6 +88,9 @@ function App() {
 				<p>blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah</p>
 			<header className="App-header">
 				<BlenderSplitter layout={layout}>
+					<div id="chooser" className="blah" onClick={clickMe}>
+						<p>Chooser</p>
+					</div>
 					<div id="one" className="blah" onClick={clickMe}>
 						<p>Click me1!</p>
 						<p>One</p>
