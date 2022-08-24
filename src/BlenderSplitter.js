@@ -476,20 +476,15 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 		const splitIndex = split.length-1;
 		const {minValue,maxValue} = calcMinMax(parent,split[splitIndex],2);
-		console.log(`splitIndex=${splitIndex} split[splitIndex]=${split[splitIndex]} min=${minValue} max=${maxValue} loc=${loc}`);
-		printArray("parentBefore",parent);
 		if( loc>=maxValue ) {
-			console.log("greater than max");
 			parent.splice( split[splitIndex], 2 );
 			setToNoneState();
 		} else if ( loc<=minValue ) {
-			console.log("less than min");
 			parent.splice( split[splitIndex]-1, 2 );
 			setToNoneState();
 		} else {
 			setSplitLocation(split,loc);
 		}
-		printArray("parentAfter",parent);
 	}
 
 	const insertSplit = (split, loc, isAfter) => {
