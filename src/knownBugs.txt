@@ -1,0 +1,2 @@
+1 Cursor is wrong sometimes
+2 Grab top most split and drag down (and it nukes a bunch of splits)

@@ -10,14 +10,16 @@ const BlenderSplitter = ( {children, layout} ) => {
 	const childMap = {};
 	children.forEach( e => childMap[ e.props.id ] = e );
 
-	// Possible states
+	// Each state has a StateEnum called "stateEnum" along with whatever
+	// data is needed for that state.  The following are the possible values
+	// for the enum.
 	const StateEnum = {
 		None: "None",
-		ElgibleToMove: "ElgibleToMove",
-		AboutToMove: "AboutToMove",
-		Moving: "Moving",
-		ElgibleToCopy: "ElgibleToCopy",
-		AboutToCopy: "AboutToCopy",
+		ElgibleToMove: "ElgibleToMove", // The cursor is over a split which is eligible to move
+		AboutToMove: "AboutToMove",     // User pressed mouse button and is about to drag
+		Moving: "Moving",               // User is dragging with mouse pressed
+		ElgibleToCopy: "ElgibleToCopy", // Cursor is over a split and ctrl is pressed
+		AboutToCopy: "AboutToCopy",     // User has pressed mouse button with ctrl and is about to drag
 	}
 
 	// useState for storing state information
@@ -122,12 +124,15 @@ const BlenderSplitter = ( {children, layout} ) => {
 			}
 		} else { // is somewhere between
 			if( isArray ) {
-				const {foundSplitIndex,foundComponentIndex} = binarySearch(content,valToTest,marginToTest);
-				foundIndex = foundSplitIndex;
-				if( foundIndex===null ) {
-					childCandidateIndices = [ foundComponentIndex ];
+				const searchResult = binarySearch(content,valToTest,marginToTest);
+				if( searchResult%2==0 ) {
+					// If it was a component and not a split
+					foundIndex = null;
+					childCandidateIndices = [ searchResult ];
 				} else {
-					childCandidateIndices = [ foundSplitIndex-1, foundSplitIndex+1 ];
+					// If it was a split
+					foundIndex = searchResult;
+					childCandidateIndices = [ foundIndex-1, foundIndex+1 ];
 				}
 			} else {
 				foundIndex = null;
@@ -173,21 +178,18 @@ const BlenderSplitter = ( {children, layout} ) => {
 	// Simply tests is a value is within a given margin
 	const testWithinMargin = (one, two, margin) => Math.abs(one - two) <= margin;
 
-	// Does a binary search within a context array.  It is not recursive or knows
-	// anything about nested arrays.  It only knows about whatever array it is
-	// passed.  This call may be invoked again on a sub-array if necessary.  It is
-	// not passed a point (x,y), but just a single value (x or y).  It returns two
-	// things: {foundSplitIndex, foundComponentIndex}.  If the test value is on a
-	// split, then foundSplitIndex is set to that split index.  Otherwise it is
-	// set to null.  Regardless if it is on a split or not, 
-	//
-	// It knows that every other
-	// element is a split.
+	// Performs a binary search within a context array.  For a point to be only
+	// a split, it must be within the reshapeMargin (either wide).  Otherwise,
+	// this function returns the index of the component that the point resides
+	// within. This function is not recursive nor knows anything about nested
+	// arrays.  It only knows about whatever array it is passed.  This call would
+	// be invoked again on a sub-array if necessary.  It is not passed a point
+	// (x,y), but just a single value (x or y).
 	const binarySearch = (content,testForMe,margin) => {
 
 		var minIndex = -1;
 		var maxIndex = content.length;
-		var foundSplitIndex = null;
+		var foundIndex = null;
 		var currentIndex;
 
 		while(minIndex+2<maxIndex) {
@@ -197,7 +199,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 			}
 			const currentValue = content[currentIndex];
 			if( testWithinMargin( currentValue, testForMe, margin ) ) {
-				foundSplitIndex = currentIndex;
+				foundIndex = currentIndex;
 				break;
 			} else if( testForMe > currentValue ) {
 				minIndex = currentIndex;
@@ -206,19 +208,28 @@ const BlenderSplitter = ( {children, layout} ) => {
 			}
 		}
 
-		var foundComponentIndex;
-		if (foundSplitIndex===null) {
-			foundComponentIndex = minIndex+1;
-		} else {
-			foundComponentIndex = null;
+		if (foundIndex===null) {
+			foundIndex = minIndex+1;
 		}
 
-		return {
-			foundSplitIndex: foundSplitIndex,
-			foundComponentIndex: foundComponentIndex
-		}
+		return foundIndex;
 	}
 
+	// At the top container level, 0% is the top/left corner and 100%
+	// is on the bottom/right corner.  When recursively calculating for
+	// nested components, the vector is converted to a percentage
+	// coordinate that corresponds to child components.  For example,
+	// in the layout below:
+	//     ┌─────────┐
+	//     │   one   │
+	//     ├───┬─────┤
+	//     │   │+    │
+	//     │two│three│
+	//     │   │     │
+	//     └───┴─────┘
+	// The point marked by "+" may about (50%,50%) in relation to
+	// the outer most container, but only at (10%,20%) in relation to
+	// child component "three".
 	const convertVector = (minValue,maxValue,isVertical,vector) => {
 		const convFunction = val => 100*(val-minValue)/(maxValue-minValue);
 		var subVector;
@@ -236,6 +247,17 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return subVector;
 	}
 
+	// Similarly, margins change for child components too.  If 1% corresponds
+	// to 10 pixels overall. Yet 10 pixels may be 1.3% for component three below.
+	//     ┌─────────┐
+	//     │   one   │
+	//     ├───┬─────┤
+	//     │   │     │
+	//     │two│three│
+	//     │   │     │
+	//     └───┴─────┘
+	// We don't want the margins getting smaller as people hover over nested
+	// components and splits.
 	const convertMargin = (minValue,maxValue,isVertical,margin) => {
 		const marginFunction = val => val*100/(maxValue-minValue);
 		var subMargin;
@@ -253,8 +275,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return subMargin;
 	}
 
-	//
-	// Just for printing.
+	// Just for debug printing.
 	const arrayToStringRecursive = (a,str) => {
 		if( Array.isArray(a) ) {
 			str = str.concat("[");
@@ -275,28 +296,32 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return str;
 	}
 
-	// Just for printing.
+	// Just for debug printing.
 	const arrayToString = (a) => {
 		return arrayToStringRecursive(a,"");
 	}
 
-	// Just for printing.
+	// Just for debug printing.
 	const printArray = (label,a) => {
 		console.log(`${label}=${arrayToString(a)}`);
 	}
 
+	// Just for debug printing.
 	const pointToString = (p) => `(${p.x},${p.y})`;
 
+	// Convenience function for determining if state is one of the copy states.
 	const isCopyState = stateEnum =>
 		stateEnum===StateEnum.ElgibleToCopy
 		|| stateEnum===StateEnum.AboutToCopy
 
+	// Convenience function for setting state to None
 	const setToNoneState = () => {
 		setState( {
 			stateEnum: StateEnum.None
 		} );
 	}
 
+	// Convenience function for setting state to EligibleToMove.
 	const setToElgibleToMoveState = (split) => {
 		setState( {
 			stateEnum: StateEnum.ElgibleToMove,
@@ -304,6 +329,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
+	// Convenience function for setting state to AboutToMove
 	const setToAboutToMoveState = (split,pressSplitLocation,pressMouseLocation) => {
 		setState( {
 			stateEnum: StateEnum.AboutToMove,
@@ -313,6 +339,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
+	// Convenience function for setting state to Moving
 	const setToMovingState = (split,pressSplitLocation,pressMouseLocation,currentMouseLocation) => {
 		setState( {
 			stateEnum: StateEnum.Moving,
@@ -323,6 +350,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
+	// Convenience function for setting state to EligibleToCopy
 	const setToElgibleToCopyState = (split) => {
 		setState( {
 			stateEnum: StateEnum.ElgibleToCopy,
@@ -330,6 +358,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
+	// Convenience function for setting state to AboutToCopy
 	const setToAboutToCopyState = (splits,pressLocation) => {
 		setState( {
 			stateEnum: StateEnum.AboutToCopy,
@@ -338,6 +367,8 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
+	// Function that evaluates the state of the mouse cursor, ctrl button, and mouse
+	// button to determine what state this should be in.
 	const determineState = (e) => {
 		const stateEnum = state.stateEnum;
 		const percent = eventToPercentVector(e);
@@ -406,6 +437,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		}
 	}
 
+	// Draws cursor based on current state
 	const updateCursor = e => {
 		const target = e.currentTarget;
 		var cursorToUse;
@@ -435,6 +467,8 @@ const BlenderSplitter = ( {children, layout} ) => {
 		target.style.cursor = cursorToUse;
 	}
 
+	// Generic function for deep copying the content array.  Used when
+	// changing the content.
 	const deepContentCopy = (content) => {
 		if(Array.isArray(content)) {
 			var ret=[];
@@ -445,6 +479,8 @@ const BlenderSplitter = ( {children, layout} ) => {
 		}
 	}
 
+	// Method for getting split location percentage.  The split parameter is
+	// an array identifier (like [1,2,3]) and it's location percentage is returned.
 	const getSplitLocation = split => {
 		var current = layoutState.content;
 		split.forEach( element => {
@@ -453,6 +489,8 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return current;
 	}
 
+	// Method for setting split location percentage.  The split parameter is
+	// an array identifier (like [1,2,3]) and the loc is a percentage (0-100)
 	const setSplitLocation = (split,loc) => {
 		var copy = deepContentCopy(layoutState.content);
 		var copyLayoutState = {
@@ -469,20 +507,35 @@ const BlenderSplitter = ( {children, layout} ) => {
 		setLayoutState(copyLayoutState);
 	}
 
-	const calcMinMax = (parent,component,distance) => {
+	// This returns the location of splits on either side of a given
+	// index.  This is best shown with an example:
+	//
+	// percentage: 0%   25%   50%   75%   100%
+	//             ┌─────┬─────┬─────┬─────┐
+	//             │ one │ two │three│four │
+	//             └─────┴─────┴─────┴─────┘
+	//     index: -1  0  1  2  3  4  5  6  7
+	//
+	// The min/max of distance 1 from index 2 would be 25% and 50%.
+	// The min/max of distance 2 from index 3 would be 25% and 75%.
+	//
+	// It basically returns the value of the splits on each side of
+	// from a given index, but is smart in that it returns 0% and
+	// 100% rather than try to access an array out of bounds.
+	const calcMinMax = (parent,index,distance) => {
 		var minValue;
 		var maxValue;
 
-		if( component-distance<0 ) {
+		if( index-distance<0 ) {
 			minValue = 0;
 		} else {
-			minValue = parent[ component - distance ];
+			minValue = parent[ index - distance ];
 		}
 
-		if( component+distance>=parent.length) {
+		if( index+distance>=parent.length) {
 			maxValue = 100;
 		} else {
-			maxValue = parent[ component + distance ];
+			maxValue = parent[ index + distance ];
 		}
 
 		return {
@@ -491,10 +544,12 @@ const BlenderSplitter = ( {children, layout} ) => {
 		}
 	}
 
+	// Performs the move state action.
 	const moveSplit = (movingState) => {
 		var isVertical = layoutState.areTopLevelSplittersVertical;
 		var currentMouseLocation = movingState.currentMouseLocation;
 
+		// This gets the parent of the split in question.
 		const split = movingState.split;
 		var parent = layoutState.content;
 		for( var i=0;i<split.length-1;i++) {
@@ -512,16 +567,20 @@ const BlenderSplitter = ( {children, layout} ) => {
 		const splitIndex = split.length-1;
 		const {minValue,maxValue} = calcMinMax(parent,split[splitIndex],2);
 		if( loc+reshapeMargin>=maxValue ) {
+			// The user moved the split beyond the edge of the next spit.  Delete it (and the component it contained).
 			parent.splice( split[splitIndex], 2 );
 			setToNoneState();
 		} else if ( loc-reshapeMargin<=minValue ) {
+			// The user moved the split beyond the edge of the previous spit.  Delete it (and the component it contained).
 			parent.splice( split[splitIndex]-1, 2 );
 			setToNoneState();
 		} else {
+			// Set new split location.
 			setSplitLocation(split,loc);
 		}
 	}
 
+	// Inserts a split before or after the provided split at given location.
 	const insertSplit = (split, loc, isAfter) => {
 		var copy = deepContentCopy(layoutState.content);
 		if( !Array.isArray(copy) ) {
@@ -552,6 +611,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		setLayoutState(copyLayoutState);
 	}
 
+	// Handler for the mouse move event
 	const mouseMoved = (e) => {
 		determineState(e);
 		updateCursor(e);
@@ -561,16 +621,19 @@ const BlenderSplitter = ( {children, layout} ) => {
 		}
 	}
 
+	// Handler for the mouse down event
 	const mouseDown = (e) => {
 		determineState(e);
 		updateCursor(e);
 	}
 
+	// Handler for the mouse up event
 	const mouseUp = (e) => {
 		determineState(e);
 		updateCursor(e);
 	}
 
+	// Generates DOM for browser to display.
 	const generateDOM = layoutState => {
 		return (
 		<div style={{ width: "100%", height: "100%" }}
@@ -582,6 +645,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		</div>);
 	}
 
+	// Recursive function called by generateDOM.
 	const generateContent = (layoutState,isCurrentSplitterVertical) => {
 
 		var styleGenerator;
