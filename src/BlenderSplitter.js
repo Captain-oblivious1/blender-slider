@@ -1,22 +1,16 @@
-import {useLayoutEffect, useRef, useState} from 'react';
+import {useState} from 'react';
 
 const BlenderSplitter = ( {children, layout} ) => {
 
-	//const ref = useRef(null);
-	//const [width, setWidth] = useState(0);
-	//const [height, setHeight] = useState(0);
-
-	//useLayoutEffect(() => {
-	//	setWidth(ref.current.offsetWidth);
-	//	setHeight(ref.current.offsetHeight);
-	//	console.log(`qwidth=${width} height=${height}`);
-	//}, [width,height]);
-
+	// useState for the layout.  This represents how sub-panes are divided and
+	// whatnot
 	const [layoutState, setLayoutState] = useState(layout);
 
+	// Used to lookup child by name
 	const childMap = {};
 	children.forEach( e => childMap[ e.props.id ] = e );
 
+	// Possible states
 	const StateEnum = {
 		None: "None",
 		ElgibleToMove: "ElgibleToMove",
@@ -24,13 +18,15 @@ const BlenderSplitter = ( {children, layout} ) => {
 		Moving: "Moving",
 		ElgibleToCopy: "ElgibleToCopy",
 		AboutToCopy: "AboutToCopy",
-		//Copying: "Copying"
 	}
 
-	const [state, setState] = useState( {
+	// useState for storing state information
+	const [state, setState] = useState( { //Initial state set to "none"
 		stateEnum: StateEnum.None,
 	} );
 
+	// Function for converting from pixels to percent (within this container).
+	// Everything within this component is in a percent coordinate system
 	const eventToPercentVector = e => {
 		const rect = e.currentTarget.getBoundingClientRect();
 		return {
@@ -38,14 +34,155 @@ const BlenderSplitter = ( {children, layout} ) => {
 			y: (e.clientY-rect.top)/(rect.bottom-rect.top) * 100 };
 	}
 
+	// The margin that is close enough to a split to be considered "on" the split.
+	// This is within percent (not pixels).
 	const reshapeMargin = 1;
 
-	const testNearSplit = (percentVector,forMove) => {
-		return testNearSplitRecursive(percentVector,layoutState.content,{x:reshapeMargin,y:reshapeMargin},layoutState.areTopLevelSplittersVertical,forMove);
+	// Function that finds the nearest split(s) to a given vector (mouse pointer location).  This 
+	// method returns an array of arrays.  The outer array is the number of "matches" and each sub-array
+	// represents a "match".  So for example, if the pointer is not near any split, then this will return
+	// an empty array.  If it matches 3 splits (like the pointer is near a T-junction), then the outer array
+	// will contain 3 sub-arrays.  Each sub-array represents a matching split.  So for example, the
+	// following example layout code:
+	//
+	// const layout = {
+	//   areTopLevelSplittersVertical: false,
+
+	//   content: [
+	//     "one",
+	//     20,
+	//     [ "two", 40, "three" ],
+	//     70,
+	//     "four"
+	//   ]
+	// };
+	//
+	// Would produce this layout of components (the 40, 20, and 70 represent what percent the splits are.
+	// They would not be displayed):
+	//
+	//        40
+	//     ┌─────────┐
+	//     │   one   │
+	//     │         │
+	//   20├───┬─────┤
+	//     │   │     │
+	//     │two│three│
+	//     │   │     │
+	//   70├───┴─────┤
+	//     │  four   │
+	//     │         │
+	//     └─────────┘
+	//
+	// The array identifier for the horizontal 20% split would be [1].  As it is element 1 of the content array.
+	// The 70% split would be [3].  Since the vertical 40% split is nested within element 2, it's identifier
+	// would be [2,1].  Though the outer edges are not specified in the array, they are still identified by this
+	// function.  So for example, the horizontal line above "one" would be [-1].  The horizontal line below
+	// "four" would be [5], the short vertical line to the left of two would be [2,-1], and the short vertical
+	// line to the right of three would be [2,3].
+	//
+	// The "shallow" parameter tells this function how "deep" to look.  The meat of this function is recursive.
+	// If shallow was true, then this method would return a split as soon as it finds one.  It would not
+	// recursively call itself on the bordering subcomponents.  If shallow were true, it would.  So for example,
+	// imagine the mouse were on the split right above the "r" in "four".  If shallow were true, then this
+	// function would return [[3]] (a single match of split [3]).  This is invoked when moving splits as one
+	// would only needs to move split [3].  If shallow were false, then it would return: [[2,2,1],[3]].  This
+	// is invoked when copying splits.  If the user were to select that point and copy up, it would copy split
+	// [2,2,1].  If they were to copy down, it would copy split [3].
+	const findNearestSplit = (percentVector,shallow) => {
+		return findNearestSplitRecursive(percentVector,layoutState.content,{x:reshapeMargin,y:reshapeMargin},layoutState.areTopLevelSplittersVertical,shallow);
 	}
 
+	// This is the recursive method that does the work for the method above.
+	const findNearestSplitRecursive = (percentVector,content,margin,isCurrentSplitterVertical,shallow) => {
+		var valToTest;
+		var marginToTest;
+		if( isCurrentSplitterVertical ) {
+			valToTest = percentVector.x;
+			marginToTest = margin.x;
+		} else {
+			valToTest = percentVector.y;
+			marginToTest = margin.y;
+		}
+
+		const isArray = Array.isArray(content);
+		const length = isArray ? content.length : null;
+
+		var foundIndex;
+		var childCandidateIndices;
+		if( testWithinMargin( valToTest, 0, marginToTest ) ) { // is at min edge
+			foundIndex = -1;
+			childCandidateIndices = isArray ? [ 0 ] : null;
+		} else if( testWithinMargin( valToTest, 100, marginToTest ) ) { // is at max edge
+			if( isArray ) {
+				foundIndex = length;
+				childCandidateIndices = [ length-1 ];
+			} else {
+				foundIndex = 1;
+				childCandidateIndices = null;
+			}
+		} else { // is somewhere between
+			if( isArray ) {
+				const {foundSplitIndex,foundComponentIndex} = binarySearch(content,valToTest,marginToTest);
+				foundIndex = foundSplitIndex;
+				if( foundIndex===null ) {
+					childCandidateIndices = [ foundComponentIndex ];
+				} else {
+					childCandidateIndices = [ foundSplitIndex-1, foundSplitIndex+1 ];
+				}
+			} else {
+				foundIndex = null;
+				childCandidateIndices = null;
+			}
+		}
+
+		var returnMe = [];
+		if( shallow && foundIndex!=null ) {
+			returnMe.push([foundIndex]);
+		} else {
+			if( isArray ) {
+				childCandidateIndices.forEach( childIndex => {
+					const minValue = childIndex===0 ? 0 : content[childIndex-1];
+					const maxValue = childIndex===length-1 ? length-1 : content[childIndex+1];
+
+					var subPercentVector = convertVector(minValue,maxValue,isCurrentSplitterVertical,percentVector);
+					var subMargin = convertMargin(minValue,maxValue,isCurrentSplitterVertical,margin);
+
+					var recurseArray = findNearestSplitRecursive(subPercentVector,content[childIndex],subMargin,!isCurrentSplitterVertical,shallow);
+					if( recurseArray.length>0 ) {
+						recurseArray.forEach( subArray => {
+							var myArray = [childIndex];
+							myArray = myArray.concat(subArray);
+							returnMe.push(myArray);
+						});
+					} else {
+						if( foundIndex!==null ) {
+							returnMe.push([foundIndex]);
+						}
+					}
+				});
+			} else {
+				if( foundIndex!==null ) {
+					returnMe.push([foundIndex]);
+				}
+			}
+		}
+
+		return returnMe;
+	}
+
+	// Simply tests is a value is within a given margin
 	const testWithinMargin = (one, two, margin) => Math.abs(one - two) <= margin;
 
+	// Does a binary search within a context array.  It is not recursive or knows
+	// anything about nested arrays.  It only knows about whatever array it is
+	// passed.  This call may be invoked again on a sub-array if necessary.  It is
+	// not passed a point (x,y), but just a single value (x or y).  It returns two
+	// things: {foundSplitIndex, foundComponentIndex}.  If the test value is on a
+	// split, then foundSplitIndex is set to that split index.  Otherwise it is
+	// set to null.  Regardless if it is on a split or not, 
+	//
+	// It knows that every other
+	// element is a split.
 	const binarySearch = (content,testForMe,margin) => {
 
 		var minIndex = -1;
@@ -116,86 +253,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		return subMargin;
 	}
 
-	const testNearSplitRecursive = (percentVector,content,margin,isCurrentSplitterVertical,returnFirst) => {
-		//console.log(`testNearSplitRecursive((${percentVector.x},${percentVector.y}),${arrayToString(content)},returnFirst=${returnFirst})`);
-		var valToTest;
-		var marginToTest;
-		if( isCurrentSplitterVertical ) {
-			valToTest = percentVector.x;
-			marginToTest = margin.x;
-		} else {
-			valToTest = percentVector.y;
-			marginToTest = margin.y;
-		}
-
-		const isArray = Array.isArray(content);
-		const length = isArray ? content.length : null;
-
-		var foundIndex;
-		var childCandidateIndices;
-		if( testWithinMargin( valToTest, 0, marginToTest ) ) { // is at min edge
-			foundIndex = -1;
-			childCandidateIndices = isArray ? [ 0 ] : null;
-		} else if( testWithinMargin( valToTest, 100, marginToTest ) ) { // is at max edge
-			if( isArray ) {
-				foundIndex = length;
-				childCandidateIndices = [ length-1 ];
-			} else {
-				foundIndex = 1;
-				childCandidateIndices = null;
-			}
-		} else { // is somewhere between
-			if( isArray ) {
-				const {foundSplitIndex,foundComponentIndex} = binarySearch(content,valToTest,marginToTest);
-				foundIndex = foundSplitIndex;
-				if( foundIndex===null ) {
-					childCandidateIndices = [ foundComponentIndex ];
-				} else {
-					childCandidateIndices = [ foundSplitIndex-1, foundSplitIndex+1 ];
-				}
-			} else {
-				foundIndex = null;
-				childCandidateIndices = null;
-			}
-		}
-
-		//console.log("foundIndex="+foundIndex);
-		var returnMe = [];
-		if( returnFirst && foundIndex!=null ) {
-			returnMe.push([foundIndex]);
-		} else {
-			if( isArray ) {
-				childCandidateIndices.forEach( childIndex => {
-					const minValue = childIndex===0 ? 0 : content[childIndex-1];
-					const maxValue = childIndex===length-1 ? length-1 : content[childIndex+1];
-
-					var subPercentVector = convertVector(minValue,maxValue,isCurrentSplitterVertical,percentVector);
-					var subMargin = convertMargin(minValue,maxValue,isCurrentSplitterVertical,margin);
-
-					var recurseArray = testNearSplitRecursive(subPercentVector,content[childIndex],subMargin,!isCurrentSplitterVertical,returnFirst);
-					if( recurseArray.length>0 ) {
-						recurseArray.forEach( subArray => {
-							var myArray = [childIndex];
-							myArray = myArray.concat(subArray);
-							returnMe.push(myArray);
-						});
-					} else {
-						if( foundIndex!==null ) {
-							returnMe.push([foundIndex]);
-						}
-					}
-				});
-			} else {
-				if( foundIndex!==null ) {
-					returnMe.push([foundIndex]);
-				}
-			}
-		}
-
-		//printArray("returnMe",returnMe);
-		return returnMe;
-	}
-
+	//
 	// Just for printing.
 	const arrayToStringRecursive = (a,str) => {
 		if( Array.isArray(a) ) {
@@ -229,15 +287,9 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 	const pointToString = (p) => `(${p.x},${p.y})`;
 
-	//const isMoveState = stateEnum =>
-	//	stateEnum===StateEnum.ElgibleToMoveforMove
-	//	|| stateEnum===StateEnum.AboutToMove
-	//	|| stateEnum===StateEnum.Moving
-
 	const isCopyState = stateEnum =>
 		stateEnum===StateEnum.ElgibleToCopy
 		|| stateEnum===StateEnum.AboutToCopy
-		//|| stateEnum===StateEnum.Copying
 
 	const setToNoneState = () => {
 		setState( {
@@ -286,21 +338,11 @@ const BlenderSplitter = ( {children, layout} ) => {
 		} );
 	}
 
-	//const setToCopyingState = (split) => {
-	//	console.log("copying split="+arrayToString(split));
-	//	setState( {
-	//		stateEnum: StateEnum.Copying,
-	//		split: split,
-	//	} );
-	//}
-
 	const determineState = (e) => {
 		const stateEnum = state.stateEnum;
 		const percent = eventToPercentVector(e);
-		//console.log(`percent=${pointToString(percent)}`);
-		const nearSplit = testNearSplit(percent,!isCopyState(stateEnum));
+		const nearSplit = findNearestSplit(percent,!isCopyState(stateEnum));
 		const length = nearSplit.length;
-		//printArray("nearSplit",nearSplit);
 
 		const isPressedNow = e.buttons &= 1;
 		if( isPressedNow ) {
@@ -309,7 +351,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 					|| stateEnum===StateEnum.ElgibleToMove ) {
 				if(e.ctrlKey) {
 					if( length>0 && length<3 ) {
-						const nearSplits = testNearSplit(percent,false);
+						const nearSplits = findNearestSplit(percent,false);
 						setToAboutToCopyState(nearSplits,percent);
 					}
 				} else {
@@ -318,12 +360,11 @@ const BlenderSplitter = ( {children, layout} ) => {
 					}
 				}
 			} else if( stateEnum===StateEnum.AboutToCopy ) {
-				const nearSplits = testNearSplit(percent,false);
+				const nearSplits = findNearestSplit(percent,false);
 				if( JSON.stringify(nearSplits) !== JSON.stringify(state.splits) ) {
 					const isVertical = state.splits[0].length%2 === 1 ? layoutState.areTopLevelSplittersVertical : !layoutState.areTopLevelSplittersVertical;
 					var chosenIndex;
 					var loc;
-					//console.log(`press=${pointToString(state.pressLocation)} percent=${pointToString(percent)}`);
 					if( isVertical ) {
 						chosenIndex = percent.x < state.pressLocation.x ? 0 : 1;
 						loc = percent.x;
@@ -332,7 +373,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 						loc = percent.y;
 					}
 					var chosenSplit;
-					if(state.splits.length==1) {
+					if(state.splits.length===1) {
 						// Left most split will only have 1 element but we want to treat it as the right/bottom most.
 						chosenSplit = state.splits[0];
 					} else {
@@ -343,18 +384,12 @@ const BlenderSplitter = ( {children, layout} ) => {
 						chosenSplit[ chosenSplit.length-1 ]+=2;
 					}
 					setToMovingState(chosenSplit,loc,percent,percent);
-					//setToCopyingState(chosenSplit);
 				}
 
 			} else if( stateEnum===StateEnum.AboutToMove ) {
-				//console.log(`nearSplit=${nearSplit} state.nearSplit=${state.nearSplit}`);
 				if( JSON.stringify(nearSplit) !== JSON.stringify(state.nearSplit) ) {
-					//var minSplit= state.nearSplit[0].length < state.nearSplit[1].length ? state.nearSplit[0] : state.nearSplit[1];
-					//printArray("minSplit",minSplit);
 					setToMovingState(state.split[0],state.pressSplitLocation,state.pressMouseLocation,percent);
-					//console.log("Moving split="+nextState.split+"!!");
 				}
-			//} else if( stateEnum===StateEnum.Copying ) {
 			} else if( stateEnum===StateEnum.Moving ) {
 				setToMovingState(state.split,state.pressSplitLocation,state.pressMouseLocation,percent);
 			}
@@ -476,10 +511,10 @@ const BlenderSplitter = ( {children, layout} ) => {
 
 		const splitIndex = split.length-1;
 		const {minValue,maxValue} = calcMinMax(parent,split[splitIndex],2);
-		if( loc>=maxValue ) {
+		if( loc+reshapeMargin>=maxValue ) {
 			parent.splice( split[splitIndex], 2 );
 			setToNoneState();
-		} else if ( loc<=minValue ) {
+		} else if ( loc-reshapeMargin<=minValue ) {
 			parent.splice( split[splitIndex]-1, 2 );
 			setToNoneState();
 		} else {
@@ -488,7 +523,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 	}
 
 	const insertSplit = (split, loc, isAfter) => {
-		//console.log("copying split="+arrayToString(split));
 		var copy = deepContentCopy(layoutState.content);
 		if( !Array.isArray(copy) ) {
 			copy = [copy];
@@ -501,7 +535,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 		var parent = copy;
 		for( var i=0;i<split.length-1;i++) {
 			var child = parent[ split[i] ];
-			//console.log(`child=${child}`);
 			if( !Array.isArray(child) ) {
 				child = [child];
 				parent[ split[i] ] = child;
@@ -509,18 +542,13 @@ const BlenderSplitter = ( {children, layout} ) => {
 			parent = child;
 		}
 		const last = split[ split.length-1 ];
-		//printArray("parent",parent);
 		if(isAfter) {
-			//console.log("after");
 			parent.splice( last+1, 0, loc );
 			parent.splice( last+1, 0, "chooser" );
 		} else {
-			//console.log("before");
 			parent.splice( last, 0, "chooser" );
 			parent.splice( last, 0, loc );
 		}
-		//printArray("before copy",layout.content);
-		//printArray("after copy",copy);
 		setLayoutState(copyLayoutState);
 	}
 
@@ -529,10 +557,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		updateCursor(e);
 
 		if( state.stateEnum===StateEnum.Moving ) {
-			//printArray("before move",layoutState.content);
-			//printArray("split",state.split);
 			moveSplit(state);
-			//printArray("after move",layoutState.content);
 		}
 	}
 
@@ -546,13 +571,7 @@ const BlenderSplitter = ( {children, layout} ) => {
 		updateCursor(e);
 	}
 
-	//const keyDown = (e) => {
-	//	console.log("keyDown! '"+e.key+"'");
-	//}
-				//onKeyDown={keyDown}
-//ref={ref} 
 	const generateDOM = layoutState => {
-		//printArray("aboutToGenerateDom",layoutState.content);
 		return (
 		<div style={{ width: "100%", height: "100%" }}
 				tabIndex={0}
@@ -579,7 +598,6 @@ const BlenderSplitter = ( {children, layout} ) => {
 				var elements=[{
 					child: generateContent(layoutState[0],!isCurrentSplitterVertical)
 				}];
-				//printArray("aboutToGenerate",layoutState);
 				for(var i=1;i<layoutState.length;i++) {
 					var element = layoutState[i];
 					const elementPercent = element-lastPercent;
