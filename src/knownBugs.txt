@@ -1,2 +1,4 @@
-1 Cursor is wrong sometimes
-2 Grab top most split and drag down (and it nukes a bunch of splits)
+1) Cursor is wrong sometimes
+2) Grab top most split and drag down (and it nukes a bunch of splits)
+3) Component requires focus before ctrl works.  So rather than pressing ctrl to put it into copy mode, one has to hit ctrl and move the mouse a little.
+4) dragging sliders causes browser to try to grab text.  Would like for all mouse events to be suppressed within children during drag.
